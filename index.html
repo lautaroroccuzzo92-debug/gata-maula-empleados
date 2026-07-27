@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Gata Maula — Registro de Mercadería</title>
+<style>
+  :root{
+    --celeste:#A8D4E0;
+    --negro:#1a1a1a;
+    --blanco:#ffffff;
+    --verde:#3a7d44;
+    --rojo:#a83232;
+    --gris:#6b6b6b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--celeste);
+    color:var(--negro);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    min-height:100vh;
+    padding-bottom:40px;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:16px;}
+  .top-actions{display:flex;justify-content:space-between;align-items:center;padding:8px 4px;}
+  .icon-btn{
+    background:none;border:none;font-size:22px;cursor:pointer;padding:6px 10px;
+    color:var(--negro);
+  }
+  .logo{display:flex;justify-content:center;margin:8px 0 4px;}
+  .logo svg{width:100%;max-width:320px;height:auto;}
+  .saludo{
+    text-align:center;font-size:17px;font-weight:600;margin:6px 0 20px;color:var(--negro);
+  }
+  h2.section-title{font-size:15px;text-transform:uppercase;letter-spacing:1px;margin:18px 0 8px;color:var(--negro);}
+  .card{
+    background:rgba(255,255,255,0.55);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:14px;
+    border:1px solid rgba(26,26,26,0.15);
+  }
+  button.big{
+    width:100%;background:var(--negro);color:var(--blanco);border:none;
+    border-radius:14px;padding:18px;font-size:17px;font-weight:700;
+    cursor:pointer;margin-bottom:12px;
+  }
+  button.big:active{opacity:0.8;}
+  button.secundario{
+    width:100%;background:transparent;color:var(--negro);border:2px solid var(--negro);
+    border-radius:14px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px;
+  }
+  .grid-captura{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  .cap-btn{
+    background:var(--negro);color:var(--blanco);border:none;border-radius:14px;
+    padding:18px 8px;font-size:14px;font-weight:600;cursor:pointer;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+  }
+  .cap-btn span.emoji{font-size:26px;}
+  .paste-zone{
+    outline:none;min-height:1px;
+  }
+  .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+  .thumb{position:relative;width:74px;height:74px;border-radius:10px;overflow:hidden;border:2px solid var(--negro);}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .thumb .pdf-badge{
+    width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    background:var(--negro);color:var(--blanco);font-size:11px;font-weight:700;
+  }
+  .thumb .del{
+    position:absolute;top:-2px;right:-2px;background:var(--rojo);color:#fff;
+    border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;
+    font-size:12px;line-height:1;
+  }
+  label{display:block;font-size:13px;font-weight:700;margin:12px 0 4px;text-transform:uppercase;letter-spacing:0.5px;}
+  input[type=text],input[type=date],input[type=number],select,textarea{
+    width:100%;padding:12px;border-radius:10px;border:1px solid rgba(26,26,26,0.3);
+    font-size:16px;background:var(--blanco);color:var(--negro);
+  }
+  textarea{resize:vertical;min-height:60px;}
+  .producto-row{
+    background:var(--blanco);border-radius:12px;padding:12px;margin-bottom:10px;
+    border:1px solid rgba(26,26,26,0.15);
+  }
+  .producto-row .fila2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .producto-row .fila3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;}
+  .quitar-producto{
+    margin-top:8px;background:none;border:none;color:var(--rojo);font-size:13px;font-weight:700;cursor:pointer;padding:0;
+  }
+  .agregar-producto{
+    width:100%;padding:12px;border-radius:12px;border:2px dashed var(--negro);background:none;
+    font-weight:700;cursor:pointer;margin-bottom:16px;
+  }
+  .pill{
+    display:inline-block;padding:4px 10px;border-radius:20px;background:var(--negro);color:#fff;
+    font-size:12px;font-weight:700;
+  }
+  .estado-box{padding:12px;border-radius:10px;margin-bottom:10px;font-size:14px;}
+  .estado-ok{background:rgba(58,125,68,0.15);border:1px solid var(--verde);color:var(--verde);}
+  .estado-error{background:rgba(168,50,50,0.15);border:1px solid var(--rojo);color:var(--rojo);}
+  .oculto{display:none !important;}
+  .loader{
+    display:flex;align-items:center;justify-content:center;gap:10px;padding:24px 0;font-weight:600;
+  }
+  .spinner{
+    width:22px;height:22px;border:3px solid rgba(26,26,26,0.2);border-top-color:var(--negro);
+    border-radius:50%;animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .selector-empleado{display:grid;grid-template-columns:1fr;gap:10px;margin-top:20px;}
+  .selector-empleado button{
+    background:var(--blanco);border:2px solid var(--negro);border-radius:14px;padding:16px;
+    font-size:17px;font-weight:700;cursor:pointer;
+  }
+  .aviso{font-size:12.5px;color:var(--gris);margin-top:6px;line-height:1.4;}
+  .footer-nav{display:flex;gap:10px;margin-top:20px;}
+  .footer-nav button{flex:1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- PANTALLA: SELECCIÓN DE EMPLEADO -->
+  <div id="pantalla-empleado">
+    <div class="logo">
+      <svg viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg">
+        <text x="160" y="30" text-anchor="middle" font-family="Georgia, serif" font-size="18" letter-spacing="6" fill="#1a1a1a">—GATA—</text>
+        <text x="160" y="95" text-anchor="middle" font-family="Georgia, serif" font-size="58" font-weight="700" fill="none" stroke="#1a1a1a" stroke-width="2">MAULA</text>
+        <line x1="40" y1="118" x2="280" y2="118" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="160" y="142" text-anchor="middle" font-family="Georgia, serif" font-size="14" letter-spacing="4" fill="#1a1a1a">FIAMBRES + VERMUT</text>
+      </svg>
+    </div>
+    <div class="saludo">¿Quién sos?</div>
+    <div class="selector-empleado" id="lista-empleados"></div>
+  </div>
+
+  <!-- PANTALLA: HOME -->
+  <div id="pantalla-home" class="oculto">
+    <div class="top-actions">
+      <button class="icon-btn" id="btn-cambiar-empleado">👤 Cambiar</button>
+      <button class="icon-btn" id="btn-config">⚙️</button>
+    </div>
+    <div class="logo">
+      <svg viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg">
+        <text x="160" y="30" text-anchor="middle" font-family="Georgia, serif" font-size="18" letter-spacing="6" fill="#1a1a1a">—GATA—</text>
+        <text x="160" y="95" text-anchor="middle" font-family="Georgia, serif" font-size="58" font-weight="700" fill="none" stroke="#1a1a1a" stroke-width="2">MAULA</text>
+        <line x1="40" y1="118" x2="280" y2="118" stroke="#1a1a1a" stroke-width="1.5"/>
+        <text x="160" y="142" text-anchor="middle" font-family="Georgia, serif" font-size="14" letter-spacing="4" fill="#1a1a1a">FIAMBRES + VERMUT</text>
+      </svg>
+    </div>
+    <div class="saludo" id="saludo-texto"></div>
+
+    <div class="card">
+      <h2 class="section-title" style="margin-top:0">Registrar mercadería</h2>
+      <div class="grid-captura">
+        <button class="cap-btn" id="btn-pegar"><span class="emoji">📋</span>Pegar imagen</button>
+        <button class="cap-btn" id="btn-camara"><span class="emoji">📷</span>Cámara</button>
+        <button class="cap-btn" id="btn-galeria"><span class="emoji">🖼️</span>Galería</button>
+        <button class="cap-btn" id="btn-pdf"><span class="emoji">📄</span>PDF</button>
+      </div>
+      <div class="aviso">iPhone: en Fotos, copiá la imagen de la factura y volvé acá para tocar "Pegar imagen".</div>
+      <div class="paste-zone" id="zona-pegado" contenteditable="true" tabindex="-1"></div>
+
+      <div class="thumbs" id="thumbs"></div>
+
+      <input type="file" id="input-camara" accept="image/*" capture="environment" class="oculto">
+      <input type="file" id="input-galeria" accept="image/*" multiple class="oculto">
+      <input type="file" id="input-pdf" accept="application/pdf" class="oculto">
+
+      <button class="big oculto" id="btn-analizar">Analizar con IA</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA: CARGANDO -->
+  <div id="pantalla-cargando" class="oculto">
+    <div class="loader"><div class="spinner"></div><span id="texto-cargando">Analizando documento…</span></div>
+  </div>
+
+  <!-- PANTALLA: REVISIÓN -->
+  <div id="pantalla-revision" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Revisá los datos</h2>
+    <div class="card">
+      <label>Tipo</label>
+      <select id="rev-tipo">
+        <option value="FACTURA">FACTURA</option>
+        <option value="REMITO">REMITO</option>
+      </select>
+      <label>Proveedor</label>
+      <input type="text" id="rev-proveedor">
+      <label>Fecha</label>
+      <input type="date" id="rev-fecha">
+      <div class="producto-row" style="margin-top:8px">
+        <div class="fila2">
+          <div><label style="margin-top:0">N° Factura</label><input type="text" id="rev-nro-factura"></div>
+          <div><label style="margin-top:0">N° Remito</label><input type="text" id="rev-nro-remito"></div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Productos</h2>
+    <div id="lista-productos"></div>
+    <button class="agregar-producto" id="btn-agregar-producto">+ Agregar producto</button>
+
+    <div class="card">
+      <label style="margin-top:0">Observaciones</label>
+      <textarea id="rev-observaciones" placeholder="Opcional"></textarea>
+    </div>
+
+    <button class="big" id="btn-confirmar">Confirmar y guardar</button>
+    <button class="secundario" id="btn-cancelar-revision">Cancelar</button>
+  </div>
+
+  <!-- PANTALLA: RESULTADO -->
+  <div id="pantalla-resultado" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Resultado</h2>
+    <div id="resultado-detalle"></div>
+    <button class="big" id="btn-registrar-otra">Registrar otra</button>
+  </div>
+
+  <!-- PANTALLA: CONFIGURACIÓN -->
+  <div id="pantalla-config" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Ajustes</h2>
+    <div class="card">
+      <label style="margin-top:0">API Key de Anthropic</label>
+      <input type="text" id="cfg-apikey" placeholder="sk-ant-...">
+      <div class="aviso">Se guarda solo en este teléfono (localStorage). Nunca se envía a ningún lado salvo al proxy propio.</div>
+
+      <label>URL del Apps Script (proxy de Sheets)</label>
+      <input type="text" id="cfg-script-url">
+
+      <label>Sheet ID — Mercadería</label>
+      <input type="text" id="cfg-sheet-mercaderia">
+      <label>Sheet ID — EERR</label>
+      <input type="text" id="cfg-sheet-eerr">
+      <label>Sheet ID — PPTO</label>
+      <input type="text" id="cfg-sheet-ppto">
+    </div>
+    <button class="big" id="btn-guardar-config">Guardar</button>
+    <button class="secundario" id="btn-cerrar-config">Volver</button>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN POR DEFECTO (editable desde Ajustes ⚙️)
+// ============================================================
+const DEFAULTS = {
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbyKy8E5ZFp-gqq0Q5njwZJ5EjY81tIMQPLCZ7HrrP_CK9Em61G96t242XnvV95a7KbTTg/exec',
+  sheetMercaderia: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgV',
+  sheetEERR: '1oqvEIqPLbQR2cEi4wQbp7mgzqp5Nb6y2wVWK9GWDKNQ',
+  sheetPPTO: '1T4y_c0n2KYF0PPACMck9hmDpBDCnus8v'
+};
+const EMPLEADOS = ['Manu', 'Facu', 'Santi'];
+const CATEGORIAS = ['FIAMBRES Y QUESOS','BEBIDAS','VERMUT','PANIFICADOS','VERDULERÍA','LIMPIEZA','DESCARTABLES','OTROS'];
+
+function cfg(key) {
+  return localStorage.getItem('gm_' + key) || DEFAULTS[key] || '';
+}
+function setCfg(key, val) {
+  localStorage.setItem('gm_' + key, val);
+}
+
+let archivosCapturados = []; // { mediaType, base64, previewUrl }
+let datosExtraidos = null;
+
+// ---------- Navegación entre pantallas ----------
+const pantallas = ['empleado','home','cargando','revision','resultado','config'];
+function mostrarPantalla(nombre) {
+  pantallas.forEach(p => {
+    document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
+  });
+}
+
+// ---------- Selección de empleado ----------
+function initSelectorEmpleado() {
+  const cont = document.getElementById('lista-empleados');
+  cont.innerHTML = '';
+  EMPLEADOS.forEach(nombre => {
+    const b = document.createElement('button');
+    b.textContent = nombre;
+    b.onclick = () => {
+      localStorage.setItem('gm_empleado', nombre);
+      irAHome();
+    };
+    cont.appendChild(b);
+  });
+}
+document.getElementById('btn-cambiar-empleado').onclick = () => {
+  mostrarPantalla('empleado');
+};
+
+function irAHome() {
+  const nombre = localStorage.getItem('gm_empleado');
+  const h = new Date().getHours();
+  const momento = h < 12 ? 'Buenos días' : (h < 20 ? 'Buenas tardes' : 'Buenas noches');
+  document.getElementById('saludo-texto').textContent = `${momento}, ${nombre}!`;
+  mostrarPantalla('home');
+}
+
+// ---------- Config ----------
+document.getElementById('btn-config').onclick = () => {
+  document.getElementById('cfg-apikey').value = cfg('apikey');
+  document.getElementById('cfg-script-url').value = cfg('scriptUrl');
+  document.getElementById('cfg-sheet-mercaderia').value = cfg('sheetMercaderia');
+  document.getElementById('cfg-sheet-eerr').value = cfg('sheetEERR');
+  document.getElementById('cfg-sheet-ppto').value = cfg('sheetPPTO');
+  mostrarPantalla('config');
+};
+document.getElementById('btn-cerrar-config').onclick = () => mostrarPantalla('home');
+document.getElementById('btn-guardar-config').onclick = () => {
+  setCfg('apikey', document.getElementById('cfg-apikey').value.trim());
+  setCfg('scriptUrl', document.getElementById('cfg-script-url').value.trim());
+  setCfg('sheetMercaderia', document.getElementById('cfg-sheet-mercaderia').value.trim());
+  setCfg('sheetEERR', document.getElementById('cfg-sheet-eerr').value.trim());
+  setCfg('sheetPPTO', document.getElementById('cfg-sheet-ppto').value.trim());
+  mostrarPantalla('home');
+};
+
+// ---------- Captura de imágenes ----------
+function agregarArchivoBase64(mediaType, base64, previewUrl) {
+  archivosCapturados.push({ mediaType, base64, previewUrl });
+  renderThumbs();
+}
+
+function renderThumbs() {
+  const cont = document.getElementById('thumbs');
+  cont.innerHTML = '';
+  archivosCapturados.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    if (f.mediaType === 'application/pdf') {
+      div.innerHTML = `<div class="pdf-badge">PDF</div><div class="del" data-i="${i}">✕</div>`;
+    } else {
+      div.innerHTML = `<img src="${f.previewUrl}"><div class="del" data-i="${i}">✕</div>`;
+    }
+    cont.appendChild(div);
+  });
+  cont.querySelectorAll('.del').forEach(btn => {
+    btn.onclick = () => {
+      archivosCapturados.splice(Number(btn.dataset.i), 1);
+      renderThumbs();
+      actualizarBotonAnalizar();
+    };
+  });
+  actualizarBotonAnalizar();
+}
+
+function actualizarBotonAnalizar() {
+  document.getElementById('btn-analizar').classList.toggle('oculto', archivosCapturados.length === 0);
+}
+
+// Convierte un File de imagen a JPEG (vía canvas) y devuelve {base64, previewUrl}
+function convertirAJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1600;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          const ratio = Math.min(MAX / w, MAX / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        resolve({ base64: dataUrl.split(',')[1], previewUrl: dataUrl });
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function archivoAPdfBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Botón Cámara / Galería
+document.getElementById('btn-camara').onclick = () => document.getElementById('input-camara').click();
+document.getElementById('btn-galeria').onclick = () => document.getElementById('input-galeria').click();
+document.getElementById('btn-pdf').onclick = () => document.getElementById('input-pdf').click();
+
+document.getElementById('input-camara').onchange = async (e) => {
+  for (const file of e.target.files) {
+    const { base64, previewUrl } = await convertirAJpeg(file);
+    agregarArchivoBase64('image/jpeg', base64, previewUrl);
+  }
+  e.target.value = '';
+};
+document.getElementById('input-galeria').onchange = async (e) => {
+  for (const file of e.target.files) {
+    const { base64, previewUrl } = await convertirAJpeg(file);
+    agregarArchivoBase64('image/jpeg', base64, previewUrl);
+  }
+  e.target.value = '';
+};
+document.getElementById('input-pdf').onchange = async (e) => {
+  for (const file of e.target.files) {
+    const base64 = await archivoAPdfBase64(file);
+    agregarArchivoBase64('application/pdf', base64, null);
+  }
+  e.target.value = '';
+};
+
+// Botón "Pegar imagen" (método principal iOS 16):
+// enfoca un div contenteditable invisible y dispara el evento paste nativo.
+const zonaPegado = document.getElementById('zona-pegado');
+document.getElementById('btn-pegar').onclick = () => {
+  zonaPegado.focus();
+  // En iOS Safari, document.execCommand('paste') no funciona por seguridad,
+  // así que le indicamos al usuario que mantenga presionado / Cmd+V.
+  // Intentamos primero la Clipboard API moderna (funciona en muchos casos con gesto de usuario):
+  if (navigator.clipboard && navigator.clipboard.read) {
+    navigator.clipboard.read().then(async (items) => {
+      for (const item of items) {
+        const tipoImg = item.types.find(t => t.startsWith('image/'));
+        if (tipoImg) {
+          const blob = await item.getType(tipoImg);
+          const file = new File([blob], 'pegado.jpg', { type: tipoImg });
+          const { base64, previewUrl } = await convertirAJpeg(file);
+          agregarArchivoBase64('image/jpeg', base64, previewUrl);
+        }
+      }
+    }).catch(() => {
+      alert('Tocá la pantalla y elegí "Pegar" (o mantené presionado sobre el botón 📋 y elegí Pegar).');
+    });
+  } else {
+    alert('Mantené presionado el botón 📋 y elegí "Pegar" desde el menú, o volvé a Fotos y copiá la imagen primero.');
+  }
+};
+zonaPegado.addEventListener('paste', async (e) => {
+  e.preventDefault();
+  const items = e.clipboardData ? e.clipboardData.items : [];
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      const file = item.getAsFile();
+      const { base64, previewUrl } = await convertirAJpeg(file);
+      agregarArchivoBase64('image/jpeg', base64, previewUrl);
+    }
+  }
+  zonaPegado.innerHTML = '';
+});
+
+// ---------- Analizar con IA ----------
+document.getElementById('btn-analizar').onclick = async () => {
+  const apikey = cfg('apikey');
+  if (!apikey) {
+    alert('Primero cargá tu API Key de Anthropic en Ajustes ⚙️');
+    return mostrarPantalla('config');
+  }
+  mostrarPantalla('cargando');
+  document.getElementById('texto-cargando').textContent = 'Analizando documento…';
+  try {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apikey },
+      body: JSON.stringify({
+        files: archivosCapturados.map(f => ({ mediaType: f.mediaType, base64: f.base64 }))
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      alert('Error al analizar: ' + (data.error || 'desconocido'));
+      mostrarPantalla('home');
+      return;
+    }
+    datosExtraidos = data.extraido;
+    cargarPantallaRevision(datosExtraidos);
+    mostrarPantalla('revision');
+  } catch (err) {
+    alert('Error de red: ' + err.message);
+    mostrarPantalla('home');
+  }
+};
+
+// ---------- Pantalla de revisión ----------
+function cargarPantallaRevision(datos) {
+  document.getElementById('rev-tipo').value = datos.tipo || 'FACTURA';
+  document.getElementById('rev-proveedor').value = datos.proveedor || '';
+  document.getElementById('rev-fecha').value = datos.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('rev-nro-factura').value = datos.numero_factura || '';
+  document.getElementById('rev-nro-remito').value = datos.numero_remito || '';
+  document.getElementById('rev-observaciones').value = '';
+  const cont = document.getElementById('lista-productos');
+  cont.innerHTML = '';
+  (datos.productos || []).forEach(p => agregarFilaProducto(p));
+  if ((datos.productos || []).length === 0) agregarFilaProducto({});
+}
+
+function agregarFilaProducto(p) {
+  const cont = document.getElementById('lista-productos');
+  const div = document.createElement('div');
+  div.className = 'producto-row';
+  const opcionesCat = CATEGORIAS.map(c => `<option value="${c}" ${p.categoria===c?'selected':''}>${c}</option>`).join('');
+  div.innerHTML = `
+    <label style="margin-top:0">Categoría</label>
+    <select class="p-categoria">${opcionesCat}</select>
+    <div class="fila2">
+      <div><label>Marca</label><input type="text" class="p-marca" value="${p.marca || ''}"></div>
+      <div><label>Descripción</label><input type="text" class="p-descripcion" value="${p.descripcion || ''}"></div>
+    </div>
+    <div class="fila3">
+      <div><label>Kg/Litros</label><input type="number" step="0.01" class="p-kg" value="${p.kg_litros ?? ''}"></div>
+      <div><label>Unidades</label><input type="number" step="1" class="p-unidades" value="${p.unidades ?? ''}"></div>
+      <div><label>Precio unit.</label><input type="number" step="0.01" class="p-precio" value="${p.precio_unitario ?? ''}"></div>
+    </div>
+    <label>Total</label>
+    <input type="number" step="0.01" class="p-total" value="${p.total ?? ''}">
+    <button class="quitar-producto">✕ Quitar producto</button>
+  `;
+  div.querySelector('.quitar-producto').onclick = () => div.remove();
+  cont.appendChild(div);
+}
+document.getElementById('btn-agregar-producto').onclick = () => agregarFilaProducto({});
+document.getElementById('btn-cancelar-revision').onclick = () => {
+  archivosCapturados = [];
+  renderThumbs();
+  mostrarPantalla('home');
+};
+
+function leerProductosDeFormulario() {
+  return Array.from(document.querySelectorAll('#lista-productos .producto-row')).map(div => ({
+    categoria: div.querySelector('.p-categoria').value,
+    marca: div.querySelector('.p-marca').value.trim(),
+    descripcion: div.querySelector('.p-descripcion').value.trim(),
+    kg_litros: div.querySelector('.p-kg').value ? Number(div.querySelector('.p-kg').value) : null,
+    unidades: div.querySelector('.p-unidades').value ? Number(div.querySelector('.p-unidades').value) : null,
+    precio_unitario: Number(div.querySelector('.p-precio').value || 0),
+    total: Number(div.querySelector('.p-total').value || 0)
+  }));
+}
+
+// ---------- Confirmar y guardar ----------
+document.getElementById('btn-confirmar').onclick = async () => {
+  const productos = leerProductosDeFormulario();
+  if (productos.length === 0) {
+    alert('Agregá al menos un producto.');
+    return;
+  }
+  const payload = {
+    action: 'registrarIngreso',
+    tipo: document.getElementById('rev-tipo').value,
+    proveedor: document.getElementById('rev-proveedor').value.trim(),
+    fecha: document.getElementById('rev-fecha').value,
+    numero_factura: document.getElementById('rev-nro-factura').value.trim(),
+    numero_remito: document.getElementById('rev-nro-remito').value.trim(),
+    responsable: localStorage.getItem('gm_empleado') || '',
+    observaciones: document.getElementById('rev-observaciones').value.trim(),
+    productos
+  };
+
+  mostrarPantalla('cargando');
+  document.getElementById('texto-cargando').textContent = 'Guardando en Sheets…';
+
+  try {
+    const resp = await fetch(cfg('scriptUrl'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS con Apps Script
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    mostrarResultado(data);
+  } catch (err) {
+    mostrarResultado({ success: false, error: 'Error de red: ' + err.message });
+  }
+};
+
+function mostrarResultado(data) {
+  const cont = document.getElementById('resultado-detalle');
+  cont.innerHTML = '';
+
+  function bloque(titulo, ok, detalle) {
+    const div = document.createElement('div');
+    div.className = 'estado-box ' + (ok ? 'estado-ok' : 'estado-error');
+    div.innerHTML = `<strong>${ok ? '✅' : '⚠️'} ${titulo}</strong><br>${detalle}`;
+    cont.appendChild(div);
+  }
+
+  if (data.mercaderia) {
+    bloque('Mercadería', data.mercaderia.success,
+      data.mercaderia.success ? `${data.mercaderia.filas} fila(s) guardadas.` : data.mercaderia.error);
+  }
+  if (data.eerr) {
+    bloque('EERR (Egresos)', data.eerr.success,
+      data.eerr.success ? `Hoja "${data.eerr.hoja}", ${data.eerr.filas} fila(s).` : data.eerr.error);
+  }
+  if (data.ppto) {
+    let det = '';
+    if (data.ppto.success) {
+      det += data.ppto.actualizados.length ? `Actualizados: ${data.ppto.actualizados.join(', ')}` : 'Sin cambios de precio relevantes.';
+      if (data.ppto.noEncontrados.length) det += `<br><strong>No encontrados en PPTO:</strong> ${data.ppto.noEncontrados.join(', ')}`;
+    } else {
+      det = data.ppto.error;
+    }
+    bloque('PPTO (Costos Variables)', data.ppto.success, det);
+  }
+  if (data.error) {
+    bloque('Error general', false, data.error);
+  }
+
+  mostrarPantalla('resultado');
+}
+
+document.getElementById('btn-registrar-otra').onclick = () => {
+  archivosCapturados = [];
+  datosExtraidos = null;
+  renderThumbs();
+  irAHome();
+};
+
+// ---------- Init ----------
+(function init() {
+  initSelectorEmpleado();
+  if (localStorage.getItem('gm_empleado')) {
+    irAHome();
+  } else {
+    mostrarPantalla('empleado');
+  }
+})();
+</script>
+</body>
+</html>
