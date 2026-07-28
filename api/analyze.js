@@ -22,11 +22,14 @@ Reglas importantes (Argentina):
 - Si el documento es un remito u orden de carga (sin CAE/CUIT de AFIP, solo detalle de mercadería entregada), es tipo "REMITO" y el número va en "numero_remito".
 - Fecha en formato YYYY-MM-DD.
 - Para cada línea de producto, separá "marca" (marca comercial, ej: "Grasetto", "Zecor") de "descripcion" (el producto en sí, ej: "Mortadela", "Bondiola ahumada"). Si no podés distinguir marca, dejá "marca" vacío y poné todo en "descripcion".
-- "categoria" es una categoría comercial general del producto (ej: "FIAMBRES Y QUESOS", "BEBIDAS", "PANIFICADOS", "VERDULERÍA", "LIMPIEZA", "OTROS").
+- "categoria" es una categoría comercial general del producto. Usá una de estas si aplica: "FIAMBRES Y QUESOS", "VERMUT", "COCINA", "INSUMOS DE LIMPIEZA", "PAN", "DESCARTABLES", "VERDULERÍA", "COMIDA DE PERSONAL". Si ninguna aplica, usá "OTROS".
 - "kg_litros" es la cantidad en kilogramos o litros si el documento lo especifica así; si el producto se vende por unidad (ej: botellas, cajones) dejá "kg_litros" en null y completá "unidades".
 - "precio_unitario" es el precio por kg/litro o por unidad (el que corresponda a como está expresado en el documento).
 - "total" es el importe total de esa línea.
 - Si un campo no aparece en el documento, usá null (nunca inventes datos).
+- "total_factura" es el importe TOTAL final del documento tal cual figura impreso (incluye IVA y cualquier otro concepto: percepciones, envío, etc.). Puede no coincidir exactamente con la suma de las líneas de producto — usá el total impreso, no lo calcules vos.
+- "iva_discriminado": true si el documento muestra el IVA desglosado por separado (subtotal + IVA + total, típico de Factura A). false si el precio ya viene "todo incluido" sin desglose (típico de Factura B/C o remitos).
+- "alicuota_iva_detectada": si "iva_discriminado" es true, la alícuota de IVA que ves en el documento (los valores típicos en Argentina son 21, 10.5, 27, 5 o 2.5). Si hay más de una alícuota en la misma factura, poné la que corresponda a la mayoría de los productos. Si "iva_discriminado" es false o no podés determinarla, dejá este campo en null.
 
 Formato de salida exacto:
 {
@@ -35,6 +38,9 @@ Formato de salida exacto:
   "fecha": "YYYY-MM-DD",
   "numero_factura": "string o null",
   "numero_remito": "string o null",
+  "total_factura": number o null,
+  "iva_discriminado": boolean,
+  "alicuota_iva_detectada": number o null,
   "productos": [
     {
       "categoria": "string",
