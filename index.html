@@ -203,6 +203,44 @@
     <button class="agregar-producto" id="btn-agregar-producto">+ Agregar producto</button>
 
     <div class="card">
+      <label style="margin-top:0">Total de la factura (con IVA incluido)</label>
+      <input type="number" step="0.01" id="rev-total-factura">
+      <div class="aviso">Es el total impreso en el documento. Puede no coincidir exactamente con la suma de los productos (fletes, redondeos, etc.) — así queda igual a lo que le debemos al proveedor.</div>
+
+      <label>IVA de esta factura</label>
+      <select id="rev-iva">
+        <option value="">No sé / no discriminada (se carga en PPTO con IVA incluido)</option>
+        <option value="21">21%</option>
+        <option value="10.5">10,5%</option>
+        <option value="27">27%</option>
+        <option value="5">5%</option>
+        <option value="2.5">2,5%</option>
+        <option value="0">0% (Exento)</option>
+      </select>
+      <div class="aviso">Se usa para calcular el precio SIN IVA que se carga en Costos Variables (PPTO). En Mercadería y EERR se guarda el precio/total tal cual figura en la factura (con IVA).</div>
+    </div>
+
+    <div class="card">
+      <label style="margin-top:0">¿Fue pagada?</label>
+      <select id="rev-pagado">
+        <option value="no">No, queda pendiente</option>
+        <option value="si">Sí, ya se pagó</option>
+      </select>
+      <div id="wrap-medio-pago">
+        <label>Medio de pago</label>
+        <select id="rev-medio-pago">
+          <option value="Efectivo">Efectivo</option>
+          <option value="Transferencia">Transferencia</option>
+          <option value="Tarjeta débito">Tarjeta débito</option>
+          <option value="Tarjeta crédito">Tarjeta crédito</option>
+          <option value="Cheque">Cheque</option>
+          <option value="Cuenta corriente">Cuenta corriente</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
       <label style="margin-top:0">Observaciones</label>
       <textarea id="rev-observaciones" placeholder="Opcional"></textarea>
     </div>
@@ -238,6 +276,14 @@
     </div>
     <button class="big" id="btn-guardar-config">Guardar</button>
     <button class="secundario" id="btn-cerrar-config">Volver</button>
+
+    <div class="card" style="margin-top:22px">
+      <h2 class="section-title" style="margin-top:0">Compartir esta configuración</h2>
+      <div class="aviso">Generá un link que ya trae todo cargado (API key, URLs, Sheet IDs). Mandaselo por WhatsApp a Manu o Facu: al abrirlo una vez en su celular, no van a tener que escribir nada en Ajustes.</div>
+      <button class="secundario" id="btn-generar-link" style="margin-top:10px">Generar link para compartir</button>
+      <textarea id="link-generado" readonly style="margin-top:8px;font-size:12px;" class="oculto"></textarea>
+      <button class="secundario oculto" id="btn-copiar-link">Copiar link</button>
+    </div>
   </div>
 
 </div>
@@ -252,8 +298,8 @@ const DEFAULTS = {
   sheetEERR: '1oqvEIqPLbQR2cEi4wQbp7mgzqp5Nb6y2wVWK9GWDKNQ',
   sheetPPTO: '1T4y_c0n2KYF0PPACMck9hmDpBDCnus8v'
 };
-const EMPLEADOS = ['Manu', 'Facu', 'Santi'];
-const CATEGORIAS = ['FIAMBRES Y QUESOS','BEBIDAS','VERMUT','PANIFICADOS','VERDULERÍA','LIMPIEZA','DESCARTABLES','OTROS'];
+const EMPLEADOS = ['Manu', 'Facu', 'Colaboradores de Gata'];
+const CATEGORIAS = ['FIAMBRES Y QUESOS','VERMUT','COCINA','INSUMOS DE LIMPIEZA','PAN','DESCARTABLES','VERDULERÍA','COMIDA DE PERSONAL','OTROS'];
 
 function cfg(key) {
   return localStorage.getItem('gm_' + key) || DEFAULTS[key] || '';
@@ -497,11 +543,30 @@ function cargarPantallaRevision(datos) {
   document.getElementById('rev-nro-factura').value = datos.numero_factura || '';
   document.getElementById('rev-nro-remito').value = datos.numero_remito || '';
   document.getElementById('rev-observaciones').value = '';
+  document.getElementById('rev-pagado').value = 'no';
+  document.getElementById('rev-medio-pago').value = 'Efectivo';
+  document.getElementById('wrap-medio-pago').classList.add('oculto');
+
   const cont = document.getElementById('lista-productos');
   cont.innerHTML = '';
   (datos.productos || []).forEach(p => agregarFilaProducto(p));
   if ((datos.productos || []).length === 0) agregarFilaProducto({});
+
+  const sumaLineas = (datos.productos || []).reduce((acc, p) => acc + (Number(p.total) || 0), 0);
+  document.getElementById('rev-total-factura').value = datos.total_factura ?? sumaLineas;
+
+  const selIva = document.getElementById('rev-iva');
+  if (datos.iva_discriminado && datos.alicuota_iva_detectada != null) {
+    selIva.value = String(datos.alicuota_iva_detectada);
+    if (selIva.value !== String(datos.alicuota_iva_detectada)) selIva.value = ''; // por si la IA detecta una alícuota no listada
+  } else {
+    selIva.value = '';
+  }
 }
+
+document.getElementById('rev-pagado').onchange = (e) => {
+  document.getElementById('wrap-medio-pago').classList.toggle('oculto', e.target.value !== 'si');
+};
 
 function agregarFilaProducto(p) {
   const cont = document.getElementById('lista-productos');
@@ -553,6 +618,9 @@ document.getElementById('btn-confirmar').onclick = async () => {
     alert('Agregá al menos un producto.');
     return;
   }
+  const ivaVal = document.getElementById('rev-iva').value;
+  const pagado = document.getElementById('rev-pagado').value === 'si';
+
   const payload = {
     action: 'registrarIngreso',
     tipo: document.getElementById('rev-tipo').value,
@@ -562,6 +630,10 @@ document.getElementById('btn-confirmar').onclick = async () => {
     numero_remito: document.getElementById('rev-nro-remito').value.trim(),
     responsable: localStorage.getItem('gm_empleado') || '',
     observaciones: document.getElementById('rev-observaciones').value.trim(),
+    total_factura: Number(document.getElementById('rev-total-factura').value || 0),
+    iva_pct: ivaVal === '' ? null : Number(ivaVal),
+    pagado: pagado,
+    medio_pago: pagado ? document.getElementById('rev-medio-pago').value : '',
     productos
   };
 
@@ -598,13 +670,14 @@ function mostrarResultado(data) {
   }
   if (data.eerr) {
     bloque('EERR (Egresos)', data.eerr.success,
-      data.eerr.success ? `Hoja "${data.eerr.hoja}", ${data.eerr.filas} fila(s).` : data.eerr.error);
+      data.eerr.success ? `Hoja "${data.eerr.hoja}", ${data.eerr.filas} fila(s). Total cargado: $${(data.eerr.totalCargado||0).toLocaleString('es-AR',{minimumFractionDigits:2})}` : data.eerr.error);
   }
   if (data.ppto) {
     let det = '';
     if (data.ppto.success) {
-      det += data.ppto.actualizados.length ? `Actualizados: ${data.ppto.actualizados.join(', ')}` : 'Sin cambios de precio relevantes.';
+      det += data.ppto.actualizados.length ? `Actualizados (precio neto): ${data.ppto.actualizados.join(', ')}` : 'Sin cambios de precio relevantes.';
       if (data.ppto.noEncontrados.length) det += `<br><strong>No encontrados en PPTO:</strong> ${data.ppto.noEncontrados.join(', ')}`;
+      if (data.ppto.avisoSinIva) det += `<br><em>${data.ppto.avisoSinIva}</em>`;
     } else {
       det = data.ppto.error;
     }
@@ -624,8 +697,70 @@ document.getElementById('btn-registrar-otra').onclick = () => {
   irAHome();
 };
 
+// ---------- Compartir configuración (link con todo cargado) ----------
+function codificarConfig(obj) {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+}
+function decodificarConfig(str) {
+  return JSON.parse(decodeURIComponent(escape(atob(str))));
+}
+
+document.getElementById('btn-generar-link').onclick = () => {
+  const datos = {
+    apikey: cfg('apikey'),
+    scriptUrl: cfg('scriptUrl'),
+    sheetMercaderia: cfg('sheetMercaderia'),
+    sheetEERR: cfg('sheetEERR'),
+    sheetPPTO: cfg('sheetPPTO')
+  };
+  if (!datos.apikey) {
+    alert('Primero cargá y guardá la API Key acá arriba, así el link la incluye.');
+    return;
+  }
+  const codificado = codificarConfig(datos);
+  const url = `${location.origin}${location.pathname}?setup=${codificado}`;
+  const area = document.getElementById('link-generado');
+  area.value = url;
+  area.classList.remove('oculto');
+  area.rows = 4;
+  document.getElementById('btn-copiar-link').classList.remove('oculto');
+};
+
+document.getElementById('btn-copiar-link').onclick = async () => {
+  const area = document.getElementById('link-generado');
+  area.select();
+  try {
+    await navigator.clipboard.writeText(area.value);
+    alert('Link copiado. Mandaselo por WhatsApp a Manu o Facu.');
+  } catch (e) {
+    document.execCommand('copy');
+    alert('Link copiado (o seleccionado, si tu navegador no permite copiar solo).');
+  }
+};
+
+function aplicarConfigDesdeLink() {
+  const params = new URLSearchParams(location.search);
+  const setup = params.get('setup');
+  if (!setup) return false;
+  try {
+    const datos = decodificarConfig(setup);
+    if (datos.apikey) setCfg('apikey', datos.apikey);
+    if (datos.scriptUrl) setCfg('scriptUrl', datos.scriptUrl);
+    if (datos.sheetMercaderia) setCfg('sheetMercaderia', datos.sheetMercaderia);
+    if (datos.sheetEERR) setCfg('sheetEERR', datos.sheetEERR);
+    if (datos.sheetPPTO) setCfg('sheetPPTO', datos.sheetPPTO);
+    // Limpiamos el link de la barra de direcciones para no dejar la config a la vista
+    history.replaceState({}, '', location.pathname);
+    return true;
+  } catch (e) {
+    alert('El link de configuración no se pudo leer. Pedí que te manden uno nuevo.');
+    return false;
+  }
+}
+
 // ---------- Init ----------
 (function init() {
+  aplicarConfigDesdeLink();
   initSelectorEmpleado();
   if (localStorage.getItem('gm_empleado')) {
     irAHome();
