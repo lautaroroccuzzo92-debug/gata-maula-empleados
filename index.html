@@ -672,6 +672,10 @@ function mostrarResultado(data) {
     bloque('EERR (Egresos)', data.eerr.success,
       data.eerr.success ? `Hoja "${data.eerr.hoja}", ${data.eerr.filas} fila(s). Total cargado: $${(data.eerr.totalCargado||0).toLocaleString('es-AR',{minimumFractionDigits:2})}` : data.eerr.error);
   }
+  if (data.calendario) {
+    bloque('Calendario de pagos', data.calendario.success,
+      data.calendario.success ? (data.calendario.nota || 'Sincronizado correctamente.') : data.calendario.error);
+  }
   if (data.ppto) {
     let det = '';
     if (data.ppto.success) {
