@@ -188,6 +188,12 @@
       </select>
       <label>Proveedor</label>
       <input type="text" id="rev-proveedor">
+      <div id="aviso-proveedor" class="aviso oculto"></div>
+      <div id="sugerencias-proveedor" class="oculto" style="margin-top:6px"></div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;text-transform:none;font-size:14px">
+        <input type="checkbox" id="rev-proveedor-nuevo" style="width:auto">
+        Es un proveedor nuevo (agregarlo a la lista)
+      </label>
       <label>Fecha</label>
       <input type="date" id="rev-fecha">
       <div class="producto-row" style="margin-top:8px">
@@ -310,6 +316,53 @@ function setCfg(key, val) {
 
 let archivosCapturados = []; // { mediaType, base64, previewUrl }
 let datosExtraidos = null;
+let LISTA_PROVEEDORES = [];
+let LISTA_CONCEPTOS = null; // null = todavía no se pudo leer, usar CATEGORIAS de respaldo
+
+function normalizarTexto(str) {
+  return String(str || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+// Mismo criterio que el backend: puntaje 0-1 de palabras en común, solo para sugerir.
+function similitudPalabras(a, b) {
+  const wa = a.split(' ').filter(Boolean);
+  const wb = b.split(' ').filter(Boolean);
+  if (wa.length === 0 || wb.length === 0) return 0;
+  const setB = new Set(wb);
+  const comunes = wa.filter(w => setB.has(w)).length;
+  return comunes / Math.max(wa.length, wb.length);
+}
+
+function mejorCandidato(nombre, lista) {
+  const nombreNorm = normalizarTexto(nombre);
+  let mejor = null, mejorScore = 0;
+  lista.forEach(item => {
+    const score = similitudPalabras(nombreNorm, normalizarTexto(item));
+    if (score > mejorScore) { mejorScore = score; mejor = item; }
+  });
+  return mejorScore >= 0.5 ? { nombre: mejor, score: mejorScore } : null;
+}
+
+async function cargarListas() {
+  const url = cfg('scriptUrl');
+  if (!url) return;
+  try {
+    const [rProv, rConc] = await Promise.all([
+      fetch(url + '?action=listaProveedores'),
+      fetch(url + '?action=listaConceptos')
+    ]);
+    const dProv = await rProv.json();
+    const dConc = await rConc.json();
+    if (dProv.success) LISTA_PROVEEDORES = dProv.data || [];
+    if (dConc.success && dConc.data && dConc.data.length) LISTA_CONCEPTOS = dConc.data;
+  } catch (e) {
+    // Si falla, seguimos con texto libre / categorías de respaldo, sin bloquear la app.
+  }
+}
+
+function categoriasDisponibles() {
+  return (LISTA_CONCEPTOS && LISTA_CONCEPTOS.length) ? LISTA_CONCEPTOS : CATEGORIAS;
+}
 
 // ---------- Navegación entre pantallas ----------
 const pantallas = ['empleado','home','cargando','revision','resultado','config'];
@@ -343,6 +396,7 @@ function irAHome() {
   const momento = h < 12 ? 'Buenos días' : (h < 20 ? 'Buenas tardes' : 'Buenas noches');
   document.getElementById('saludo-texto').textContent = `${momento}, ${nombre}!`;
   mostrarPantalla('home');
+  cargarListas();
 }
 
 // ---------- Config ----------
@@ -546,6 +600,7 @@ function cargarPantallaRevision(datos) {
   document.getElementById('rev-pagado').value = 'no';
   document.getElementById('rev-medio-pago').value = 'Efectivo';
   document.getElementById('wrap-medio-pago').classList.add('oculto');
+  document.getElementById('rev-proveedor-nuevo').checked = false;
 
   const cont = document.getElementById('lista-productos');
   cont.innerHTML = '';
@@ -562,7 +617,67 @@ function cargarPantallaRevision(datos) {
   } else {
     selIva.value = '';
   }
+
+  revisarProveedor();
 }
+
+function revisarProveedor() {
+  const input = document.getElementById('rev-proveedor');
+  const aviso = document.getElementById('aviso-proveedor');
+  const nombre = input.value.trim();
+  aviso.classList.add('oculto');
+  document.getElementById('sugerencias-proveedor').classList.add('oculto');
+  if (!nombre || LISTA_PROVEEDORES.length === 0) return;
+
+  const existeExacto = LISTA_PROVEEDORES.some(p => normalizarTexto(p) === normalizarTexto(nombre));
+  if (existeExacto) {
+    document.getElementById('rev-proveedor-nuevo').checked = false;
+    return;
+  }
+
+  const candidato = mejorCandidato(nombre, LISTA_PROVEEDORES);
+  if (candidato) {
+    aviso.classList.remove('oculto');
+    aviso.innerHTML = `No es exactamente igual a un proveedor ya cargado. ¿Es <strong>"${candidato.nombre}"</strong>? <button type="button" id="btn-usar-sugerencia-prov" style="margin-left:6px">Usar ese</button>`;
+    document.getElementById('btn-usar-sugerencia-prov').onclick = () => {
+      input.value = candidato.nombre;
+      revisarProveedor();
+    };
+  } else {
+    aviso.classList.remove('oculto');
+    aviso.textContent = 'No encontramos un proveedor parecido en la lista. Si es correcto, tildá "Es un proveedor nuevo" abajo.';
+  }
+}
+
+document.getElementById('rev-proveedor').addEventListener('input', (e) => {
+  const texto = e.target.value.trim();
+  const cont = document.getElementById('sugerencias-proveedor');
+  if (!texto || LISTA_PROVEEDORES.length === 0) {
+    cont.classList.add('oculto');
+    return;
+  }
+  const coincidencias = LISTA_PROVEEDORES
+    .filter(p => normalizarTexto(p).indexOf(normalizarTexto(texto)) >= 0)
+    .slice(0, 5);
+  if (coincidencias.length === 0) {
+    cont.classList.add('oculto');
+    return;
+  }
+  cont.innerHTML = coincidencias.map(p =>
+    `<button type="button" class="secundario sugerencia-item" style="padding:8px;font-size:13px;margin-bottom:4px">${p}</button>`
+  ).join('');
+  cont.classList.remove('oculto');
+  cont.querySelectorAll('.sugerencia-item').forEach((btn, i) => {
+    btn.onclick = () => {
+      document.getElementById('rev-proveedor').value = coincidencias[i];
+      cont.classList.add('oculto');
+      revisarProveedor();
+    };
+  });
+});
+document.getElementById('rev-proveedor').addEventListener('blur', () => {
+  setTimeout(() => revisarProveedor(), 200); // timeout para permitir el click en una sugerencia antes de ocultarla
+});
 
 document.getElementById('rev-pagado').onchange = (e) => {
   document.getElementById('wrap-medio-pago').classList.toggle('oculto', e.target.value !== 'si');
@@ -572,7 +687,7 @@ function agregarFilaProducto(p) {
   const cont = document.getElementById('lista-productos');
   const div = document.createElement('div');
   div.className = 'producto-row';
-  const opcionesCat = CATEGORIAS.map(c => `<option value="${c}" ${p.categoria===c?'selected':''}>${c}</option>`).join('');
+  const opcionesCat = categoriasDisponibles().map(c => `<option value="${c}" ${p.categoria===c?'selected':''}>${c}</option>`).join('');
   div.innerHTML = `
     <label style="margin-top:0">Categoría</label>
     <select class="p-categoria">${opcionesCat}</select>
@@ -634,6 +749,7 @@ document.getElementById('btn-confirmar').onclick = async () => {
     iva_pct: ivaVal === '' ? null : Number(ivaVal),
     pagado: pagado,
     medio_pago: pagado ? document.getElementById('rev-medio-pago').value : '',
+    proveedor_nuevo: document.getElementById('rev-proveedor-nuevo').checked,
     productos
   };
 
@@ -654,6 +770,7 @@ document.getElementById('btn-confirmar').onclick = async () => {
 };
 
 function mostrarResultado(data) {
+  data = data || {};
   const cont = document.getElementById('resultado-detalle');
   cont.innerHTML = '';
 
@@ -664,13 +781,17 @@ function mostrarResultado(data) {
     cont.appendChild(div);
   }
 
+  if (data.proveedorNuevo) {
+    bloque('Proveedor nuevo', data.proveedorNuevo.success,
+      data.proveedorNuevo.success ? `"${data.proveedorNuevo.agregado}" agregado a la Lista de Proveedores.` : data.proveedorNuevo.error);
+  }
   if (data.mercaderia) {
     bloque('Mercadería', data.mercaderia.success,
-      data.mercaderia.success ? `${data.mercaderia.filas} fila(s) guardadas.` : data.mercaderia.error);
+      data.mercaderia.success ? `${data.mercaderia.filas} fila(s) guardadas (fila ${data.mercaderia.filaEscrita} de la hoja).` : data.mercaderia.error);
   }
   if (data.eerr) {
     bloque('EERR (Egresos)', data.eerr.success,
-      data.eerr.success ? `Hoja "${data.eerr.hoja}", ${data.eerr.filas} fila(s). Total cargado: $${(data.eerr.totalCargado||0).toLocaleString('es-AR',{minimumFractionDigits:2})}` : data.eerr.error);
+      data.eerr.success ? `Hoja "${data.eerr.hoja}", fila ${data.eerr.filaEscrita}. Total cargado: $${(data.eerr.totalCargado||0).toLocaleString('es-AR',{minimumFractionDigits:2})}` : data.eerr.error);
   }
   if (data.calendario) {
     bloque('Calendario de pagos', data.calendario.success,
@@ -689,6 +810,11 @@ function mostrarResultado(data) {
   }
   if (data.error) {
     bloque('Error general', false, data.error);
+  }
+
+  if (cont.innerHTML.trim() === '') {
+    bloque('Respuesta inesperada', false,
+      'El Apps Script respondió algo que la app no reconoce (vacío o con otra forma). Esto suele pasar cuando el Apps Script todavía tiene una versión vieja publicada. Revisá: Implementar → Gestionar implementaciones → editar → Nueva versión → Implementar.');
   }
 
   mostrarPantalla('resultado');
