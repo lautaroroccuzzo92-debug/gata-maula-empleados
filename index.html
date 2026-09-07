@@ -791,7 +791,9 @@ function mostrarResultado(data) {
   }
   if (data.eerr) {
     bloque('EERR (Egresos)', data.eerr.success,
-      data.eerr.success ? `Hoja "${data.eerr.hoja}", fila ${data.eerr.filaEscrita}. Total cargado: $${(data.eerr.totalCargado||0).toLocaleString('es-AR',{minimumFractionDigits:2})}` : data.eerr.error);
+      data.eerr.success
+        ? `Hoja "${data.eerr.hoja}", fila ${data.eerr.filaEscrita}. Total cargado: $${(data.eerr.totalCargado||0).toLocaleString('es-AR',{minimumFractionDigits:2})}${data.eerr.debug ? '<br><span style="font-size:11px;opacity:0.7">' + data.eerr.debug + '</span>' : ''}`
+        : data.eerr.error);
   }
   if (data.calendario) {
     bloque('Calendario de pagos', data.calendario.success,
