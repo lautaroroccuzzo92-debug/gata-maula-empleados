@@ -800,15 +800,63 @@ function mostrarResultado(data) {
       data.calendario.success ? (data.calendario.nota || 'Sincronizado correctamente.') : data.calendario.error);
   }
   if (data.ppto) {
-    let det = '';
+    const divPpto = document.createElement('div');
+    divPpto.className = 'estado-box ' + (data.ppto.success ? 'estado-ok' : 'estado-error');
+    let htmlPpto = `<strong>${data.ppto.success ? '✅' : '⚠️'} PPTO (Costos Variables)</strong><br>`;
     if (data.ppto.success) {
-      det += data.ppto.actualizados.length ? `Actualizados (precio neto): ${data.ppto.actualizados.join(', ')}` : 'Sin cambios de precio relevantes.';
-      if (data.ppto.noEncontrados.length) det += `<br><strong>No encontrados en PPTO:</strong> ${data.ppto.noEncontrados.join(', ')}`;
-      if (data.ppto.avisoSinIva) det += `<br><em>${data.ppto.avisoSinIva}</em>`;
+      htmlPpto += data.ppto.actualizados.length ? `Actualizados (precio neto): ${data.ppto.actualizados.join(', ')}` : 'Sin cambios de precio relevantes.';
+      if (data.ppto.noEncontrados.length) {
+        htmlPpto += `<br><strong>No encontrados en PPTO:</strong>`;
+        data.ppto.noEncontrados.forEach((item, i) => {
+          htmlPpto += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(26,26,26,0.15)">${item.nombreProducto}`;
+          if (item.candidato) {
+            htmlPpto += `<br>¿Es "<strong>${item.candidato}</strong>"? `;
+            htmlPpto += `<button type="button" class="secundario btn-confirmar-match" data-idx="${i}" style="padding:8px;font-size:13px;margin-top:4px">Sí, confirmar y actualizar precio</button>`;
+            htmlPpto += `<span id="match-status-${i}" style="margin-left:6px;font-size:13px"></span>`;
+          } else {
+            htmlPpto += ` <span style="opacity:0.7">(sin candidato parecido — revisá el nombre en Costos Variables)</span>`;
+          }
+          htmlPpto += `</div>`;
+        });
+      }
+      if (data.ppto.avisoSinIva) htmlPpto += `<br><em>${data.ppto.avisoSinIva}</em>`;
     } else {
-      det = data.ppto.error;
+      htmlPpto += data.ppto.error;
     }
-    bloque('PPTO (Costos Variables)', data.ppto.success, det);
+    divPpto.innerHTML = htmlPpto;
+    cont.appendChild(divPpto);
+
+    if (data.ppto.success && data.ppto.noEncontrados.length) {
+      divPpto.querySelectorAll('.btn-confirmar-match').forEach(btn => {
+        btn.onclick = async () => {
+          const idx = Number(btn.dataset.idx);
+          const item = data.ppto.noEncontrados[idx];
+          const status = document.getElementById(`match-status-${idx}`);
+          btn.disabled = true;
+          btn.textContent = 'Actualizando...';
+          try {
+            const resp = await fetch(cfg('scriptUrl'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ action: 'confirmarMatchPpto', candidato: item.candidato, precioConIva: item.precioConIva, ivaPct: item.ivaPct })
+            });
+            const res = await resp.json();
+            if (res.success) {
+              status.textContent = `✅ Actualizado a $${res.precioNuevo}`;
+              btn.style.display = 'none';
+            } else {
+              status.textContent = `⚠️ ${res.error}`;
+              btn.disabled = false;
+              btn.textContent = 'Sí, confirmar y actualizar precio';
+            }
+          } catch (e) {
+            status.textContent = '⚠️ Error de red: ' + e.message;
+            btn.disabled = false;
+            btn.textContent = 'Sí, confirmar y actualizar precio';
+          }
+        };
+      });
+    }
   }
   if (data.error) {
     bloque('Error general', false, data.error);
