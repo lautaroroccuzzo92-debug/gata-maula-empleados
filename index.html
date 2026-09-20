@@ -116,6 +116,19 @@
   .aviso{font-size:12.5px;color:var(--gris);margin-top:6px;line-height:1.4;}
   .footer-nav{display:flex;gap:10px;margin-top:20px;}
   .footer-nav button{flex:1;}
+  .login-form input{margin-bottom:2px;}
+  .error-login{color:var(--rojo);font-size:13px;margin-top:10px;min-height:16px;}
+  .lista-item{
+    background:var(--blanco);border-radius:12px;padding:12px;margin-bottom:8px;
+    border:1px solid rgba(26,26,26,0.15);display:flex;justify-content:space-between;
+    align-items:center;gap:10px;
+  }
+  .lista-item .nombre{font-weight:700;}
+  .lista-item .sub{font-size:12.5px;color:var(--gris);}
+  .bajo-minimo{color:var(--rojo);font-weight:700;}
+  .total-vivo{font-size:22px;font-weight:700;text-align:center;margin:10px 0;}
+  .pill-pendiente{background:var(--rojo);}
+  .pill-pagado{background:var(--verde);}
 </style>
 </head>
 <body>
@@ -131,14 +144,21 @@
         <text x="160" y="142" text-anchor="middle" font-family="Georgia, serif" font-size="14" letter-spacing="4" fill="#1a1a1a">FIAMBRES + VERMUT</text>
       </svg>
     </div>
-    <div class="saludo">¿Quién sos?</div>
-    <div class="selector-empleado" id="lista-empleados"></div>
+    <div class="saludo">Iniciá sesión</div>
+    <div class="card login-form">
+      <label style="margin-top:0">Usuario</label>
+      <input type="text" id="login-email" autocomplete="username" placeholder="manu">
+      <label>Contraseña</label>
+      <input type="password" id="login-password" autocomplete="current-password">
+      <button class="big" id="btn-login" style="margin-top:16px">Entrar</button>
+      <div class="error-login" id="login-error"></div>
+    </div>
   </div>
 
   <!-- PANTALLA: HOME -->
   <div id="pantalla-home" class="oculto">
     <div class="top-actions">
-      <button class="icon-btn" id="btn-cambiar-empleado">👤 Cambiar</button>
+      <button class="icon-btn" id="btn-cambiar-empleado">🔓 Salir</button>
       <button class="icon-btn" id="btn-config">⚙️</button>
     </div>
     <div class="logo">
@@ -151,7 +171,18 @@
     </div>
     <div class="saludo" id="saludo-texto"></div>
 
-    <div class="card">
+    <div class="card" id="nav-otras-pantallas">
+      <h2 class="section-title" style="margin-top:0">Otras pantallas</h2>
+      <div class="grid-captura">
+        <button class="cap-btn" id="btn-nav-desperdicio"><span class="emoji">🗑️</span>Desperdicio</button>
+        <button class="cap-btn oculto" id="btn-nav-recetas"><span class="emoji">📖</span>Recetas</button>
+        <button class="cap-btn oculto" id="btn-nav-caja"><span class="emoji">💰</span>Caja diaria</button>
+        <button class="cap-btn oculto" id="btn-nav-ingresos"><span class="emoji">🧾</span>Ingresos/Egresos</button>
+        <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
+      </div>
+    </div>
+
+    <div class="card" id="card-mercaderia">
       <h2 class="section-title" style="margin-top:0">Registrar mercadería</h2>
       <div class="grid-captura">
         <button class="cap-btn" id="btn-pegar"><span class="emoji">📋</span>Pegar imagen</button>
@@ -262,6 +293,150 @@
     <button class="big" id="btn-registrar-otra">Registrar otra</button>
   </div>
 
+  <!-- PANTALLA: DESPERDICIO -->
+  <div id="pantalla-desperdicio" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Cargar desperdicio</h2>
+    <div class="card">
+      <label style="margin-top:0">Insumo</label>
+      <input type="text" id="desp-insumo-input" placeholder="Buscar insumo...">
+      <input type="hidden" id="desp-insumo-id">
+      <div id="desp-sugerencias" class="oculto" style="margin-top:6px"></div>
+      <label>Cantidad</label>
+      <input type="number" step="0.01" id="desp-cantidad">
+      <label>Motivo</label>
+      <textarea id="desp-motivo" placeholder="Ej: se venció, se rompió, control de calidad..."></textarea>
+      <label>Fecha</label>
+      <input type="date" id="desp-fecha">
+    </div>
+    <button class="big" id="btn-guardar-desperdicio">Guardar desperdicio</button>
+    <button class="secundario" id="btn-cancelar-desperdicio">Volver</button>
+    <div id="desp-resultado"></div>
+  </div>
+
+  <!-- PANTALLA: RECETAS -->
+  <div id="pantalla-recetas" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Recetas</h2>
+    <div id="recetas-lista"></div>
+    <button class="agregar-producto" id="btn-nueva-receta">+ Nueva receta</button>
+    <button class="secundario" id="btn-volver-recetas">Volver</button>
+
+    <div id="receta-form" class="oculto">
+      <h2 class="section-title">Detalle de la receta</h2>
+      <input type="hidden" id="receta-id">
+      <div class="card">
+        <label style="margin-top:0">Nombre del producto</label>
+        <input type="text" id="receta-nombre">
+        <label>Categoría en la carta</label>
+        <input type="text" id="receta-categoria" placeholder="vermut, fiambres y quesos, cocina, pan, sandwiches...">
+        <label>Preparación</label>
+        <textarea id="receta-preparacion" placeholder="Paso a paso (opcional)"></textarea>
+        <label>Margen objetivo (%)</label>
+        <input type="number" step="0.01" id="receta-margen" value="65">
+      </div>
+      <h2 class="section-title">Insumos de la receta</h2>
+      <div id="receta-insumos-lista"></div>
+      <button class="agregar-producto" id="btn-agregar-insumo-receta">+ Agregar insumo</button>
+      <div class="card">
+        <div class="aviso">Costo total y precio sugerido se calculan al guardar.</div>
+        <div class="total-vivo" id="receta-costo-preview">$0,00</div>
+      </div>
+      <button class="big" id="btn-guardar-receta">Guardar receta</button>
+      <button class="secundario" id="btn-cancelar-receta">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA: CAJA DIARIA -->
+  <div id="pantalla-caja" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Cierre de caja diaria</h2>
+    <div class="card">
+      <label style="margin-top:0">Fecha</label>
+      <input type="date" id="caja-fecha">
+      <div class="producto-row" style="margin-top:8px">
+        <div class="fila2">
+          <div><label style="margin-top:0">Tarjeta crédito</label><input type="number" step="0.01" class="caja-campo" id="caja-tarjeta-credito"></div>
+          <div><label style="margin-top:0">Tarjeta débito</label><input type="number" step="0.01" class="caja-campo" id="caja-tarjeta-debito"></div>
+        </div>
+        <div class="fila2" style="margin-top:8px">
+          <div><label>Transferencia</label><input type="number" step="0.01" class="caja-campo" id="caja-transferencia"></div>
+          <div><label>QR Posnet</label><input type="number" step="0.01" class="caja-campo" id="caja-qr-posnet"></div>
+        </div>
+        <div class="fila2" style="margin-top:8px">
+          <div><label>QR Mercado Pago</label><input type="number" step="0.01" class="caja-campo" id="caja-qr-mercado-pago"></div>
+          <div><label>Efectivo</label><input type="number" step="0.01" class="caja-campo" id="caja-efectivo"></div>
+        </div>
+      </div>
+      <div class="total-vivo" id="caja-total-vivo">$0,00</div>
+    </div>
+    <button class="big" id="btn-guardar-caja">Guardar cierre</button>
+    <button class="secundario" id="btn-cancelar-caja">Volver</button>
+    <div id="caja-resultado"></div>
+  </div>
+
+  <!-- PANTALLA: INGRESOS / EGRESOS -->
+  <div id="pantalla-ingresos" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Ingresos / Egresos</h2>
+    <div id="ingresos-lista"></div>
+    <button class="agregar-producto" id="btn-nuevo-ingreso-egreso">+ Cargar movimiento</button>
+    <button class="secundario" id="btn-volver-ingresos">Volver</button>
+
+    <div id="ingreso-egreso-form" class="oculto">
+      <div class="card">
+        <label style="margin-top:0">Fecha</label>
+        <input type="date" id="ie-fecha">
+        <label>Proveedor (opcional)</label>
+        <input type="text" id="ie-proveedor">
+        <label>Concepto</label>
+        <input type="text" id="ie-concepto" placeholder="personal, alquiler, luz, fiambres y quesos...">
+        <label>Monto</label>
+        <input type="number" step="0.01" id="ie-monto">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;text-transform:none;font-size:14px">
+          <input type="checkbox" id="ie-tiene-iva" style="width:auto">
+          Tiene IVA discriminado
+        </label>
+        <div id="ie-wrap-iva" class="oculto">
+          <label>Alícuota IVA</label>
+          <select id="ie-iva-pct">
+            <option value="21">21%</option>
+            <option value="10.5">10,5%</option>
+            <option value="27">27%</option>
+            <option value="5">5%</option>
+            <option value="2.5">2,5%</option>
+            <option value="0">0% (Exento)</option>
+          </select>
+        </div>
+        <label>¿Está pagado?</label>
+        <select id="ie-estado-pago">
+          <option value="pendiente">Pendiente</option>
+          <option value="pagado">Pagado</option>
+        </select>
+        <div id="ie-wrap-medio-pago" class="oculto">
+          <label>Medio de pago</label>
+          <select id="ie-medio-pago">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+            <option value="Tarjeta débito">Tarjeta débito</option>
+            <option value="Tarjeta crédito">Tarjeta crédito</option>
+            <option value="Cheque">Cheque</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <label>N° Factura / Remito (opcional)</label>
+        <input type="text" id="ie-factura-numero">
+        <label>Observaciones</label>
+        <textarea id="ie-observaciones"></textarea>
+      </div>
+      <button class="big" id="btn-guardar-ingreso-egreso">Guardar</button>
+      <button class="secundario" id="btn-cancelar-ingreso-egreso">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA: STOCK (lectura) -->
+  <div id="pantalla-stock" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Stock</h2>
+    <div id="stock-lista"></div>
+    <button class="secundario" id="btn-volver-stock">Volver</button>
+  </div>
+
   <!-- PANTALLA: CONFIGURACIÓN -->
   <div id="pantalla-config" class="oculto">
     <h2 class="section-title" style="margin-top:0">Ajustes</h2>
@@ -269,23 +444,13 @@
       <label style="margin-top:0">API Key de Anthropic</label>
       <input type="text" id="cfg-apikey" placeholder="sk-ant-...">
       <div class="aviso">Se guarda solo en este teléfono (localStorage). Nunca se envía a ningún lado salvo al proxy propio.</div>
-
-      <label>URL del Apps Script (proxy de Sheets)</label>
-      <input type="text" id="cfg-script-url">
-
-      <label>Sheet ID — Mercadería</label>
-      <input type="text" id="cfg-sheet-mercaderia">
-      <label>Sheet ID — EERR</label>
-      <input type="text" id="cfg-sheet-eerr">
-      <label>Sheet ID — PPTO</label>
-      <input type="text" id="cfg-sheet-ppto">
     </div>
     <button class="big" id="btn-guardar-config">Guardar</button>
     <button class="secundario" id="btn-cerrar-config">Volver</button>
 
     <div class="card" style="margin-top:22px">
       <h2 class="section-title" style="margin-top:0">Compartir esta configuración</h2>
-      <div class="aviso">Generá un link que ya trae todo cargado (API key, URLs, Sheet IDs). Mandaselo por WhatsApp a Manu o Facu: al abrirlo una vez en su celular, no van a tener que escribir nada en Ajustes.</div>
+      <div class="aviso">Generá un link que ya trae cargada la API Key de Anthropic. Mandaselo por WhatsApp a Manu o Facu: al abrirlo una vez en su celular, no van a tener que escribirla en Ajustes. El usuario y contraseña de cada uno se cargan por separado en el login.</div>
       <button class="secundario" id="btn-generar-link" style="margin-top:10px">Generar link para compartir</button>
       <textarea id="link-generado" readonly style="margin-top:8px;font-size:12px;" class="oculto"></textarea>
       <button class="secundario oculto" id="btn-copiar-link">Copiar link</button>
@@ -294,21 +459,22 @@
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ============================================================
-// CONFIGURACIÓN POR DEFECTO (editable desde Ajustes ⚙️)
+// SUPABASE — reemplaza el webhook de Apps Script / Google Sheets.
+// SUPABASE_URL y SUPABASE_ANON_KEY son seguras de dejar acá: los datos
+// están protegidos por Row Level Security, no por mantener esto en secreto.
+// TODO: reemplazar por los valores reales del proyecto de Supabase.
 // ============================================================
-const DEFAULTS = {
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbyKy8E5ZFp-gqq0Q5njwZJ5EjY81tIMQPLCZ7HrrP_CK9Em61G96t242XnvV95a7KbTTg/exec',
-  sheetMercaderia: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgV',
-  sheetEERR: '1oqvEIqPLbQR2cEi4wQbp7mgzqp5Nb6y2wVWK9GWDKNQ',
-  sheetPPTO: '1T4y_c0n2KYF0PPACMck9hmDpBDCnus8v'
-};
-const EMPLEADOS = ['Manu', 'Facu', 'Colaboradores de Gata'];
+const SUPABASE_URL = 'https://flawxsfxeomdvxhhtnly.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsYXd4c2Z4ZW9tZHZ4aGh0bmx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MTkwMTgsImV4cCI6MjEwNTQ5NTAxOH0.zP0t_P8gJAJyOVAgIFN--HkCmTGvGZdUoHoFpVyh9ZU';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const CATEGORIAS = ['FIAMBRES Y QUESOS','VERMUT','COCINA','INSUMOS DE LIMPIEZA','PAN','DESCARTABLES','VERDULERÍA','COMIDA DE PERSONAL','OTROS'];
 
 function cfg(key) {
-  return localStorage.getItem('gm_' + key) || DEFAULTS[key] || '';
+  return localStorage.getItem('gm_' + key) || '';
 }
 function setCfg(key, val) {
   localStorage.setItem('gm_' + key, val);
@@ -317,7 +483,13 @@ function setCfg(key, val) {
 let archivosCapturados = []; // { mediaType, base64, previewUrl }
 let datosExtraidos = null;
 let LISTA_PROVEEDORES = [];
-let LISTA_CONCEPTOS = null; // null = todavía no se pudo leer, usar CATEGORIAS de respaldo
+let LISTA_INSUMOS = []; // { id, nombre, precio_costo_kg, subcategoria } — para desperdicio/recetas
+let USUARIO_ACTUAL = null; // { id, nombre, rol }
+
+async function tokenSesion() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session ? session.access_token : null;
+}
 
 function normalizarTexto(str) {
   return String(str || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -344,57 +516,89 @@ function mejorCandidato(nombre, lista) {
 }
 
 async function cargarListas() {
-  const url = cfg('scriptUrl');
-  if (!url) return;
   try {
-    const [rProv, rConc] = await Promise.all([
-      fetch(url + '?action=listaProveedores'),
-      fetch(url + '?action=listaConceptos')
-    ]);
-    const dProv = await rProv.json();
-    const dConc = await rConc.json();
-    if (dProv.success) LISTA_PROVEEDORES = dProv.data || [];
-    if (dConc.success && dConc.data && dConc.data.length) LISTA_CONCEPTOS = dConc.data;
+    const { data: prov } = await supabase.from('proveedores').select('nombre').order('nombre');
+    LISTA_PROVEEDORES = (prov || []).map(p => p.nombre);
   } catch (e) {
-    // Si falla, seguimos con texto libre / categorías de respaldo, sin bloquear la app.
+    // Si falla, seguimos con texto libre, sin bloquear la app.
+  }
+}
+
+async function cargarInsumos() {
+  try {
+    const { data } = await supabase.from('insumos').select('id,nombre,precio_costo_kg,subcategoria').order('nombre');
+    LISTA_INSUMOS = data || [];
+  } catch (e) {
+    LISTA_INSUMOS = [];
   }
 }
 
 function categoriasDisponibles() {
-  return (LISTA_CONCEPTOS && LISTA_CONCEPTOS.length) ? LISTA_CONCEPTOS : CATEGORIAS;
+  return CATEGORIAS;
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
   });
 }
 
-// ---------- Selección de empleado ----------
-function initSelectorEmpleado() {
-  const cont = document.getElementById('lista-empleados');
-  cont.innerHTML = '';
-  EMPLEADOS.forEach(nombre => {
-    const b = document.createElement('button');
-    b.textContent = nombre;
-    b.onclick = () => {
-      localStorage.setItem('gm_empleado', nombre);
-      irAHome();
-    };
-    cont.appendChild(b);
-  });
-}
-document.getElementById('btn-cambiar-empleado').onclick = () => {
+// ---------- Login / sesión ----------
+document.getElementById('btn-login').onclick = async () => {
+  const usuario = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorDiv = document.getElementById('login-error');
+  errorDiv.textContent = '';
+  if (!usuario || !password) {
+    errorDiv.textContent = 'Completá usuario y contraseña.';
+    return;
+  }
+  // El usuario escribe solo su nombre de usuario (ej. "manu"); internamente
+  // Supabase Auth necesita un email, así que completamos el dominio interno.
+  const email = usuario.includes('@') ? usuario : `${usuario.toLowerCase()}@gatamaula.local`;
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    errorDiv.textContent = 'Usuario o contraseña incorrectos.';
+    return;
+  }
+  await cargarUsuarioActual();
+  irAHome();
+};
+
+document.getElementById('btn-cambiar-empleado').onclick = async () => {
+  await supabase.auth.signOut();
+  USUARIO_ACTUAL = null;
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
   mostrarPantalla('empleado');
 };
 
+async function cargarUsuarioActual() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { USUARIO_ACTUAL = null; return false; }
+  const { data, error } = await supabase.from('usuarios').select('id,nombre,rol').eq('id', session.user.id).single();
+  if (error || !data) { USUARIO_ACTUAL = null; return false; }
+  USUARIO_ACTUAL = data;
+  return true;
+}
+
+function aplicarGatingPorRol() {
+  const rol = USUARIO_ACTUAL ? USUARIO_ACTUAL.rol : null;
+  const soloAdminEncargado = ['admin', 'encargado'].includes(rol);
+  document.getElementById('card-mercaderia').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-recetas').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-caja').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-ingresos').classList.toggle('oculto', !soloAdminEncargado);
+}
+
 function irAHome() {
-  const nombre = localStorage.getItem('gm_empleado');
+  const nombre = USUARIO_ACTUAL ? USUARIO_ACTUAL.nombre : '';
   const h = new Date().getHours();
   const momento = h < 12 ? 'Buenos días' : (h < 20 ? 'Buenas tardes' : 'Buenas noches');
   document.getElementById('saludo-texto').textContent = `${momento}, ${nombre}!`;
+  aplicarGatingPorRol();
   mostrarPantalla('home');
   cargarListas();
 }
@@ -402,19 +606,11 @@ function irAHome() {
 // ---------- Config ----------
 document.getElementById('btn-config').onclick = () => {
   document.getElementById('cfg-apikey').value = cfg('apikey');
-  document.getElementById('cfg-script-url').value = cfg('scriptUrl');
-  document.getElementById('cfg-sheet-mercaderia').value = cfg('sheetMercaderia');
-  document.getElementById('cfg-sheet-eerr').value = cfg('sheetEERR');
-  document.getElementById('cfg-sheet-ppto').value = cfg('sheetPPTO');
   mostrarPantalla('config');
 };
 document.getElementById('btn-cerrar-config').onclick = () => mostrarPantalla('home');
 document.getElementById('btn-guardar-config').onclick = () => {
   setCfg('apikey', document.getElementById('cfg-apikey').value.trim());
-  setCfg('scriptUrl', document.getElementById('cfg-script-url').value.trim());
-  setCfg('sheetMercaderia', document.getElementById('cfg-sheet-mercaderia').value.trim());
-  setCfg('sheetEERR', document.getElementById('cfg-sheet-eerr').value.trim());
-  setCfg('sheetPPTO', document.getElementById('cfg-sheet-ppto').value.trim());
   mostrarPantalla('home');
 };
 
@@ -737,13 +933,11 @@ document.getElementById('btn-confirmar').onclick = async () => {
   const pagado = document.getElementById('rev-pagado').value === 'si';
 
   const payload = {
-    action: 'registrarIngreso',
     tipo: document.getElementById('rev-tipo').value,
     proveedor: document.getElementById('rev-proveedor').value.trim(),
     fecha: document.getElementById('rev-fecha').value,
     numero_factura: document.getElementById('rev-nro-factura').value.trim(),
     numero_remito: document.getElementById('rev-nro-remito').value.trim(),
-    responsable: localStorage.getItem('gm_empleado') || '',
     observaciones: document.getElementById('rev-observaciones').value.trim(),
     total_factura: Number(document.getElementById('rev-total-factura').value || 0),
     iva_pct: ivaVal === '' ? null : Number(ivaVal),
@@ -754,18 +948,23 @@ document.getElementById('btn-confirmar').onclick = async () => {
   };
 
   mostrarPantalla('cargando');
-  document.getElementById('texto-cargando').textContent = 'Guardando en Sheets…';
+  document.getElementById('texto-cargando').textContent = 'Guardando...';
 
   try {
-    const resp = await fetch(cfg('scriptUrl'), {
+    const token = await tokenSesion();
+    const resp = await fetch('/api/registrar-ingreso', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS con Apps Script
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(payload)
     });
     const data = await resp.json();
-    mostrarResultado(data);
+    if (!resp.ok) {
+      mostrarResultado({ error: data.error || 'Error desconocido.' });
+    } else {
+      mostrarResultado(data.resultado);
+    }
   } catch (err) {
-    mostrarResultado({ success: false, error: 'Error de red: ' + err.message });
+    mostrarResultado({ error: 'Error de red: ' + err.message });
   }
 };
 
@@ -781,90 +980,19 @@ function mostrarResultado(data) {
     cont.appendChild(div);
   }
 
-  if (data.proveedorNuevo) {
-    bloque('Proveedor nuevo', data.proveedorNuevo.success,
-      data.proveedorNuevo.success ? `"${data.proveedorNuevo.agregado}" agregado a la Lista de Proveedores.` : data.proveedorNuevo.error);
-  }
-  if (data.mercaderia) {
-    bloque('Mercadería', data.mercaderia.success,
-      data.mercaderia.success ? `${data.mercaderia.filas} fila(s) guardadas (fila ${data.mercaderia.filaEscrita} de la hoja).` : data.mercaderia.error);
-  }
-  if (data.eerr) {
-    bloque('EERR (Egresos)', data.eerr.success,
-      data.eerr.success
-        ? `Hoja "${data.eerr.hoja}", fila ${data.eerr.filaEscrita}. Total cargado: $${(data.eerr.totalCargado||0).toLocaleString('es-AR',{minimumFractionDigits:2})}${data.eerr.debug ? '<br><span style="font-size:11px;opacity:0.7">' + data.eerr.debug + '</span>' : ''}`
-        : data.eerr.error);
-  }
-  if (data.calendario) {
-    bloque('Calendario de pagos', data.calendario.success,
-      data.calendario.success ? (data.calendario.nota || 'Sincronizado correctamente.') : data.calendario.error);
-  }
-  if (data.ppto) {
-    const divPpto = document.createElement('div');
-    divPpto.className = 'estado-box ' + (data.ppto.success ? 'estado-ok' : 'estado-error');
-    let htmlPpto = `<strong>${data.ppto.success ? '✅' : '⚠️'} PPTO (Costos Variables)</strong><br>`;
-    if (data.ppto.success) {
-      htmlPpto += data.ppto.actualizados.length ? `Actualizados (precio neto): ${data.ppto.actualizados.join(', ')}` : 'Sin cambios de precio relevantes.';
-      if (data.ppto.noEncontrados.length) {
-        htmlPpto += `<br><strong>No encontrados en PPTO:</strong>`;
-        data.ppto.noEncontrados.forEach((item, i) => {
-          htmlPpto += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(26,26,26,0.15)">${item.nombreProducto}`;
-          if (item.candidato) {
-            htmlPpto += `<br>¿Es "<strong>${item.candidato}</strong>"? `;
-            htmlPpto += `<button type="button" class="secundario btn-confirmar-match" data-idx="${i}" style="padding:8px;font-size:13px;margin-top:4px">Sí, confirmar y actualizar precio</button>`;
-            htmlPpto += `<span id="match-status-${i}" style="margin-left:6px;font-size:13px"></span>`;
-          } else {
-            htmlPpto += ` <span style="opacity:0.7">(sin candidato parecido — revisá el nombre en Costos Variables)</span>`;
-          }
-          htmlPpto += `</div>`;
-        });
-      }
-      if (data.ppto.avisoSinIva) htmlPpto += `<br><em>${data.ppto.avisoSinIva}</em>`;
-    } else {
-      htmlPpto += data.ppto.error;
-    }
-    divPpto.innerHTML = htmlPpto;
-    cont.appendChild(divPpto);
-
-    if (data.ppto.success && data.ppto.noEncontrados.length) {
-      divPpto.querySelectorAll('.btn-confirmar-match').forEach(btn => {
-        btn.onclick = async () => {
-          const idx = Number(btn.dataset.idx);
-          const item = data.ppto.noEncontrados[idx];
-          const status = document.getElementById(`match-status-${idx}`);
-          btn.disabled = true;
-          btn.textContent = 'Actualizando...';
-          try {
-            const resp = await fetch(cfg('scriptUrl'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({ action: 'confirmarMatchPpto', candidato: item.candidato, precioConIva: item.precioConIva, ivaPct: item.ivaPct })
-            });
-            const res = await resp.json();
-            if (res.success) {
-              status.textContent = `✅ Actualizado a $${res.precioNuevo}`;
-              btn.style.display = 'none';
-            } else {
-              status.textContent = `⚠️ ${res.error}`;
-              btn.disabled = false;
-              btn.textContent = 'Sí, confirmar y actualizar precio';
-            }
-          } catch (e) {
-            status.textContent = '⚠️ Error de red: ' + e.message;
-            btn.disabled = false;
-            btn.textContent = 'Sí, confirmar y actualizar precio';
-          }
-        };
-      });
-    }
-  }
   if (data.error) {
-    bloque('Error general', false, data.error);
-  }
-
-  if (cont.innerHTML.trim() === '') {
-    bloque('Respuesta inesperada', false,
-      'El Apps Script respondió algo que la app no reconoce (vacío o con otra forma). Esto suele pasar cuando el Apps Script todavía tiene una versión vieja publicada. Revisá: Implementar → Gestionar implementaciones → editar → Nueva versión → Implementar.');
+    bloque('Error', false, data.error);
+  } else {
+    bloque('Proveedor', true, `"${data.proveedor?.nombre || ''}" registrado/actualizado.`);
+    if (data.insumos && data.insumos.length) {
+      const detalle = data.insumos.map(i => `${i.nombre} (${i.cantidad} @ $${Number(i.precio_costo_kg).toLocaleString('es-AR',{minimumFractionDigits:2})})`).join('<br>');
+      bloque('Insumos y stock actualizados', true, detalle);
+    }
+    if (data.lineas_sin_stock && data.lineas_sin_stock.length) {
+      const detalle = data.lineas_sin_stock.map(l => `${l.nombre || '(sin nombre)'} — ${l.categoria}`).join('<br>');
+      bloque('Líneas sin seguimiento de stock', true, `Estas categorías no generan insumo/stock, solo quedan en Ingresos/Egresos:<br>${detalle}`);
+    }
+    bloque('Ingresos/Egresos', true, 'Movimiento de la factura registrado.');
   }
 
   mostrarPantalla('resultado');
@@ -886,13 +1014,7 @@ function decodificarConfig(str) {
 }
 
 document.getElementById('btn-generar-link').onclick = () => {
-  const datos = {
-    apikey: cfg('apikey'),
-    scriptUrl: cfg('scriptUrl'),
-    sheetMercaderia: cfg('sheetMercaderia'),
-    sheetEERR: cfg('sheetEERR'),
-    sheetPPTO: cfg('sheetPPTO')
-  };
+  const datos = { apikey: cfg('apikey') };
   if (!datos.apikey) {
     alert('Primero cargá y guardá la API Key acá arriba, así el link la incluye.');
     return;
@@ -925,10 +1047,6 @@ function aplicarConfigDesdeLink() {
   try {
     const datos = decodificarConfig(setup);
     if (datos.apikey) setCfg('apikey', datos.apikey);
-    if (datos.scriptUrl) setCfg('scriptUrl', datos.scriptUrl);
-    if (datos.sheetMercaderia) setCfg('sheetMercaderia', datos.sheetMercaderia);
-    if (datos.sheetEERR) setCfg('sheetEERR', datos.sheetEERR);
-    if (datos.sheetPPTO) setCfg('sheetPPTO', datos.sheetPPTO);
     // Limpiamos el link de la barra de direcciones para no dejar la config a la vista
     history.replaceState({}, '', location.pathname);
     return true;
@@ -938,15 +1056,385 @@ function aplicarConfigDesdeLink() {
   }
 }
 
-// ---------- Init ----------
-(function init() {
-  aplicarConfigDesdeLink();
-  initSelectorEmpleado();
-  if (localStorage.getItem('gm_empleado')) {
-    irAHome();
+// ---------- Desperdicio ----------
+document.getElementById('btn-nav-desperdicio').onclick = async () => {
+  await cargarInsumos();
+  document.getElementById('desp-insumo-input').value = '';
+  document.getElementById('desp-insumo-id').value = '';
+  document.getElementById('desp-cantidad').value = '';
+  document.getElementById('desp-motivo').value = '';
+  document.getElementById('desp-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('desp-resultado').innerHTML = '';
+  mostrarPantalla('desperdicio');
+};
+document.getElementById('btn-cancelar-desperdicio').onclick = () => mostrarPantalla('home');
+
+document.getElementById('desp-insumo-input').addEventListener('input', (e) => {
+  const texto = normalizarTexto(e.target.value.trim());
+  const cont = document.getElementById('desp-sugerencias');
+  document.getElementById('desp-insumo-id').value = '';
+  if (!texto) { cont.classList.add('oculto'); return; }
+  const coincidencias = LISTA_INSUMOS.filter(i => normalizarTexto(i.nombre).indexOf(texto) >= 0).slice(0, 6);
+  if (!coincidencias.length) { cont.classList.add('oculto'); return; }
+  cont.innerHTML = coincidencias.map(i => `<button type="button" class="secundario desp-sug-item" data-id="${i.id}" style="padding:8px;font-size:13px;margin-bottom:4px">${i.nombre}</button>`).join('');
+  cont.classList.remove('oculto');
+  cont.querySelectorAll('.desp-sug-item').forEach(btn => {
+    btn.onclick = () => {
+      document.getElementById('desp-insumo-input').value = btn.textContent;
+      document.getElementById('desp-insumo-id').value = btn.dataset.id;
+      cont.classList.add('oculto');
+    };
+  });
+});
+
+document.getElementById('btn-guardar-desperdicio').onclick = async () => {
+  const insumoId = document.getElementById('desp-insumo-id').value;
+  const cantidad = Number(document.getElementById('desp-cantidad').value || 0);
+  const motivo = document.getElementById('desp-motivo').value.trim();
+  const fecha = document.getElementById('desp-fecha').value;
+  const resDiv = document.getElementById('desp-resultado');
+  if (!insumoId) { resDiv.innerHTML = '<div class="estado-box estado-error">Elegí un insumo de la lista.</div>'; return; }
+  if (!cantidad || cantidad <= 0) { resDiv.innerHTML = '<div class="estado-box estado-error">Ingresá una cantidad válida.</div>'; return; }
+  if (!motivo) { resDiv.innerHTML = '<div class="estado-box estado-error">Ingresá un motivo.</div>'; return; }
+  const { data, error } = await supabase.rpc('registrar_desperdicio', {
+    p_insumo_id: insumoId, p_cantidad: cantidad, p_motivo: motivo, p_fecha: fecha
+  });
+  if (error) {
+    resDiv.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`;
   } else {
-    mostrarPantalla('empleado');
+    resDiv.innerHTML = `<div class="estado-box estado-ok">✅ Desperdicio registrado. Valor: $${Number(data.valor_calculado).toLocaleString('es-AR',{minimumFractionDigits:2})}</div>`;
+    document.getElementById('desp-cantidad').value = '';
+    document.getElementById('desp-motivo').value = '';
   }
+};
+
+// ---------- Stock (lectura) ----------
+document.getElementById('btn-nav-stock').onclick = async () => {
+  const cont = document.getElementById('stock-lista');
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await supabase.from('stock').select('cantidad_actual,stock_minimo,insumos(nombre,subcategoria)').order('insumo_id');
+  if (error) {
+    cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`;
+  } else if (!data || !data.length) {
+    cont.innerHTML = '<div class="aviso">Todavía no hay insumos con stock cargado.</div>';
+  } else {
+    cont.innerHTML = data.map(s => {
+      const bajo = Number(s.cantidad_actual) <= Number(s.stock_minimo);
+      return `<div class="lista-item">
+        <div><div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div><div class="sub">${s.insumos?.subcategoria || ''}</div></div>
+        <div class="${bajo ? 'bajo-minimo' : ''}">${Number(s.cantidad_actual).toLocaleString('es-AR')}${bajo ? ' ⚠️' : ''}</div>
+      </div>`;
+    }).join('');
+  }
+  mostrarPantalla('stock');
+};
+document.getElementById('btn-volver-stock').onclick = () => mostrarPantalla('home');
+
+// ---------- Recetas ----------
+let recetaInsumoRows = []; // {insumo_id, nombre, cantidad_gramos}
+
+document.getElementById('btn-nav-recetas').onclick = async () => {
+  await cargarInsumos();
+  await cargarListaRecetas();
+  document.getElementById('receta-form').classList.add('oculto');
+  mostrarPantalla('recetas');
+};
+document.getElementById('btn-volver-recetas').onclick = () => mostrarPantalla('home');
+
+async function cargarListaRecetas() {
+  const cont = document.getElementById('recetas-lista');
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await supabase.from('recetas').select('*').order('nombre_producto');
+  if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
+  if (!data || !data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay recetas cargadas.</div>'; return; }
+  cont.innerHTML = data.map(r => `
+    <div class="lista-item">
+      <div>
+        <div class="nombre">${r.nombre_producto}</div>
+        <div class="sub">${r.categoria_carta} · costo $${Number(r.costo_total_calculado||0).toLocaleString('es-AR',{minimumFractionDigits:2})} · sugerido $${Number(r.precio_venta_sugerido||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</div>
+      </div>
+      <button type="button" class="secundario btn-editar-receta" data-id="${r.id}" style="width:auto;padding:8px 14px;margin:0">Editar</button>
+    </div>
+  `).join('');
+  cont.querySelectorAll('.btn-editar-receta').forEach(btn => {
+    btn.onclick = () => abrirFormReceta(btn.dataset.id);
+  });
+}
+
+document.getElementById('btn-nueva-receta').onclick = () => abrirFormReceta(null);
+document.getElementById('btn-cancelar-receta').onclick = () => {
+  document.getElementById('receta-form').classList.add('oculto');
+};
+
+async function abrirFormReceta(id) {
+  document.getElementById('receta-id').value = id || '';
+  recetaInsumoRows = [];
+  if (id) {
+    const { data: receta } = await supabase.from('recetas').select('*').eq('id', id).single();
+    const { data: insumosReceta } = await supabase.from('receta_insumos').select('insumo_id,cantidad_gramos,insumos(nombre)').eq('receta_id', id);
+    document.getElementById('receta-nombre').value = receta.nombre_producto;
+    document.getElementById('receta-categoria').value = receta.categoria_carta;
+    document.getElementById('receta-preparacion').value = receta.preparacion || '';
+    document.getElementById('receta-margen').value = receta.margen_objetivo;
+    recetaInsumoRows = (insumosReceta || []).map(ri => ({ insumo_id: ri.insumo_id, nombre: ri.insumos?.nombre || '', cantidad_gramos: ri.cantidad_gramos }));
+  } else {
+    document.getElementById('receta-nombre').value = '';
+    document.getElementById('receta-categoria').value = '';
+    document.getElementById('receta-preparacion').value = '';
+    document.getElementById('receta-margen').value = 65;
+  }
+  renderRecetaInsumos();
+  document.getElementById('receta-form').classList.remove('oculto');
+}
+
+function renderRecetaInsumos() {
+  const cont = document.getElementById('receta-insumos-lista');
+  cont.innerHTML = '';
+  recetaInsumoRows.forEach((row, idx) => {
+    const div = document.createElement('div');
+    div.className = 'producto-row';
+    div.innerHTML = `
+      <label style="margin-top:0">Insumo</label>
+      <input type="text" class="ri-nombre" value="${row.nombre}" placeholder="Buscar insumo...">
+      <div class="ri-sugerencias oculto" style="margin-top:6px"></div>
+      <label>Cantidad (gramos/ml)</label>
+      <input type="number" step="1" class="ri-cantidad" value="${row.cantidad_gramos || ''}">
+      <button class="quitar-producto">✕ Quitar insumo</button>
+    `;
+    const inputNombre = div.querySelector('.ri-nombre');
+    const sugCont = div.querySelector('.ri-sugerencias');
+    inputNombre.addEventListener('input', () => {
+      const texto = normalizarTexto(inputNombre.value.trim());
+      row.insumo_id = null;
+      if (!texto) { sugCont.classList.add('oculto'); return; }
+      const coincidencias = LISTA_INSUMOS.filter(i => normalizarTexto(i.nombre).indexOf(texto) >= 0).slice(0, 6);
+      if (!coincidencias.length) { sugCont.classList.add('oculto'); return; }
+      sugCont.innerHTML = coincidencias.map(i => `<button type="button" class="secundario" data-id="${i.id}" style="padding:8px;font-size:13px;margin-bottom:4px">${i.nombre}</button>`).join('');
+      sugCont.classList.remove('oculto');
+      sugCont.querySelectorAll('button').forEach(b => {
+        b.onclick = () => {
+          inputNombre.value = b.textContent;
+          row.insumo_id = b.dataset.id;
+          row.nombre = b.textContent;
+          sugCont.classList.add('oculto');
+          actualizarPreviewCosto();
+        };
+      });
+    });
+    div.querySelector('.ri-cantidad').addEventListener('input', (e) => {
+      row.cantidad_gramos = Number(e.target.value || 0);
+      actualizarPreviewCosto();
+    });
+    div.querySelector('.quitar-producto').onclick = () => {
+      recetaInsumoRows.splice(idx, 1);
+      renderRecetaInsumos();
+    };
+    cont.appendChild(div);
+  });
+  actualizarPreviewCosto();
+}
+
+function actualizarPreviewCosto() {
+  const costo = recetaInsumoRows.reduce((acc, row) => {
+    const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
+    if (!insumo || !row.cantidad_gramos) return acc;
+    return acc + (row.cantidad_gramos / 1000) * Number(insumo.precio_costo_kg);
+  }, 0);
+  document.getElementById('receta-costo-preview').textContent = `$${costo.toLocaleString('es-AR',{minimumFractionDigits:2})}`;
+}
+
+document.getElementById('btn-agregar-insumo-receta').onclick = () => {
+  recetaInsumoRows.push({ insumo_id: null, nombre: '', cantidad_gramos: null });
+  renderRecetaInsumos();
+};
+
+document.getElementById('btn-guardar-receta').onclick = async () => {
+  const id = document.getElementById('receta-id').value || null;
+  const nombre = document.getElementById('receta-nombre').value.trim();
+  const categoria = document.getElementById('receta-categoria').value.trim();
+  const preparacion = document.getElementById('receta-preparacion').value.trim();
+  const margen = Number(document.getElementById('receta-margen').value || 0);
+  const filasValidas = recetaInsumoRows.filter(r => r.insumo_id && r.cantidad_gramos > 0);
+  if (!nombre || !categoria) { alert('Completá nombre y categoría.'); return; }
+  if (!filasValidas.length) { alert('Agregá al menos un insumo con cantidad.'); return; }
+
+  const costoTotal = filasValidas.reduce((acc, row) => {
+    const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
+    return acc + (row.cantidad_gramos / 1000) * Number(insumo.precio_costo_kg);
+  }, 0);
+  // Markup simple sobre costo — fórmula de respaldo hasta definir el
+  // criterio real de pricing (ver "Fase 2+" del plan).
+  const precioSugerido = costoTotal * (1 + margen / 100);
+
+  let recetaId = id;
+  if (recetaId) {
+    const { error: errUpd } = await supabase.from('recetas').update({
+      nombre_producto: nombre, categoria_carta: categoria, preparacion,
+      margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
+    }).eq('id', recetaId);
+    if (errUpd) { alert('Error al guardar: ' + errUpd.message); return; }
+    await supabase.from('receta_insumos').delete().eq('receta_id', recetaId);
+  } else {
+    const { data, error } = await supabase.from('recetas').insert({
+      nombre_producto: nombre, categoria_carta: categoria, preparacion,
+      margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
+    }).select('id').single();
+    if (error) { alert('Error al guardar: ' + error.message); return; }
+    recetaId = data.id;
+  }
+
+  const filas = filasValidas.map(r => ({ receta_id: recetaId, insumo_id: r.insumo_id, cantidad_gramos: r.cantidad_gramos }));
+  const { error: errIns } = await supabase.from('receta_insumos').insert(filas);
+  if (errIns) { alert('Error al guardar insumos: ' + errIns.message); return; }
+
+  document.getElementById('receta-form').classList.add('oculto');
+  cargarListaRecetas();
+};
+
+// ---------- Caja diaria ----------
+const CAMPOS_CAJA = ['tarjeta-credito','tarjeta-debito','transferencia','qr-posnet','qr-mercado-pago','efectivo'];
+
+document.getElementById('btn-nav-caja').onclick = () => {
+  document.getElementById('caja-fecha').value = new Date().toISOString().slice(0,10);
+  CAMPOS_CAJA.forEach(c => document.getElementById('caja-' + c).value = '');
+  document.getElementById('caja-resultado').innerHTML = '';
+  actualizarTotalCaja();
+  mostrarPantalla('caja');
+};
+document.getElementById('btn-cancelar-caja').onclick = () => mostrarPantalla('home');
+
+function actualizarTotalCaja() {
+  const total = CAMPOS_CAJA.reduce((acc, c) => acc + Number(document.getElementById('caja-' + c).value || 0), 0);
+  document.getElementById('caja-total-vivo').textContent = `$${total.toLocaleString('es-AR',{minimumFractionDigits:2})}`;
+}
+CAMPOS_CAJA.forEach(c => document.getElementById('caja-' + c).addEventListener('input', actualizarTotalCaja));
+
+document.getElementById('btn-guardar-caja').onclick = async () => {
+  const fecha = document.getElementById('caja-fecha').value;
+  const resDiv = document.getElementById('caja-resultado');
+  if (!fecha) { resDiv.innerHTML = '<div class="estado-box estado-error">Elegí una fecha.</div>'; return; }
+  const registro = {
+    fecha,
+    tarjeta_credito: Number(document.getElementById('caja-tarjeta-credito').value || 0),
+    tarjeta_debito: Number(document.getElementById('caja-tarjeta-debito').value || 0),
+    transferencia: Number(document.getElementById('caja-transferencia').value || 0),
+    qr_posnet: Number(document.getElementById('caja-qr-posnet').value || 0),
+    qr_mercado_pago: Number(document.getElementById('caja-qr-mercado-pago').value || 0),
+    efectivo: Number(document.getElementById('caja-efectivo').value || 0),
+    usuario_id: USUARIO_ACTUAL.id
+  };
+  const { error } = await supabase.from('caja_diaria').upsert(registro, { onConflict: 'fecha' });
+  if (error) resDiv.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`;
+  else resDiv.innerHTML = '<div class="estado-box estado-ok">✅ Cierre guardado.</div>';
+};
+
+// ---------- Ingresos / Egresos ----------
+document.getElementById('btn-nav-ingresos').onclick = async () => {
+  await cargarListaIngresosEgresos();
+  document.getElementById('ingreso-egreso-form').classList.add('oculto');
+  mostrarPantalla('ingresos');
+};
+document.getElementById('btn-volver-ingresos').onclick = () => mostrarPantalla('home');
+
+async function cargarListaIngresosEgresos() {
+  const cont = document.getElementById('ingresos-lista');
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await supabase.from('ingresos_egresos').select('*').order('fecha', { ascending: false }).limit(30);
+  if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
+  if (!data || !data.length) { cont.innerHTML = '<div class="aviso">No hay movimientos cargados.</div>'; return; }
+  cont.innerHTML = data.map(m => `
+    <div class="lista-item">
+      <div>
+        <div class="nombre">${m.concepto}</div>
+        <div class="sub">${m.fecha} · $${Number(m.monto).toLocaleString('es-AR',{minimumFractionDigits:2})} · <span class="pill ${m.estado_pago==='pagado'?'pill-pagado':'pill-pendiente'}">${m.estado_pago}</span></div>
+      </div>
+      ${m.estado_pago === 'pendiente' ? `<button type="button" class="secundario btn-marcar-pagado" data-id="${m.id}" style="width:auto;padding:8px 14px;margin:0">Marcar pagado</button>` : ''}
+    </div>
+  `).join('');
+  cont.querySelectorAll('.btn-marcar-pagado').forEach(btn => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      const { error: errUpd } = await supabase.from('ingresos_egresos')
+        .update({ estado_pago: 'pagado', fecha_pago: new Date().toISOString().slice(0,10) })
+        .eq('id', btn.dataset.id);
+      if (errUpd) { alert('Error: ' + errUpd.message); btn.disabled = false; }
+      else cargarListaIngresosEgresos();
+    };
+  });
+}
+
+document.getElementById('btn-nuevo-ingreso-egreso').onclick = () => {
+  document.getElementById('ie-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('ie-proveedor').value = '';
+  document.getElementById('ie-concepto').value = '';
+  document.getElementById('ie-monto').value = '';
+  document.getElementById('ie-tiene-iva').checked = false;
+  document.getElementById('ie-wrap-iva').classList.add('oculto');
+  document.getElementById('ie-estado-pago').value = 'pendiente';
+  document.getElementById('ie-wrap-medio-pago').classList.add('oculto');
+  document.getElementById('ie-factura-numero').value = '';
+  document.getElementById('ie-observaciones').value = '';
+  document.getElementById('ingreso-egreso-form').classList.remove('oculto');
+};
+document.getElementById('btn-cancelar-ingreso-egreso').onclick = () => {
+  document.getElementById('ingreso-egreso-form').classList.add('oculto');
+};
+document.getElementById('ie-tiene-iva').onchange = (e) => {
+  document.getElementById('ie-wrap-iva').classList.toggle('oculto', !e.target.checked);
+};
+document.getElementById('ie-estado-pago').onchange = (e) => {
+  document.getElementById('ie-wrap-medio-pago').classList.toggle('oculto', e.target.value !== 'pagado');
+};
+
+document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
+  const concepto = document.getElementById('ie-concepto').value.trim();
+  const monto = Number(document.getElementById('ie-monto').value || 0);
+  if (!concepto || !monto) { alert('Completá concepto y monto.'); return; }
+  const tieneIva = document.getElementById('ie-tiene-iva').checked;
+  const estadoPago = document.getElementById('ie-estado-pago').value;
+  const proveedorNombre = document.getElementById('ie-proveedor').value.trim();
+
+  let proveedorId = null;
+  if (proveedorNombre) {
+    const { data: existente } = await supabase.from('proveedores').select('id').ilike('nombre', proveedorNombre).maybeSingle();
+    if (existente) {
+      proveedorId = existente.id;
+    } else {
+      const { data: nuevo, error: errProv } = await supabase.from('proveedores').insert({ nombre: proveedorNombre }).select('id').single();
+      if (!errProv) proveedorId = nuevo.id;
+    }
+  }
+
+  const registro = {
+    fecha: document.getElementById('ie-fecha').value,
+    proveedor_id: proveedorId,
+    concepto,
+    factura_numero: document.getElementById('ie-factura-numero').value.trim() || null,
+    monto,
+    tiene_iva: tieneIva,
+    iva_pct: tieneIva ? Number(document.getElementById('ie-iva-pct').value) : null,
+    estado_pago: estadoPago,
+    medio_pago: estadoPago === 'pagado' ? document.getElementById('ie-medio-pago').value : null,
+    fecha_pago: estadoPago === 'pagado' ? document.getElementById('ie-fecha').value : null,
+    origen: 'manual',
+    usuario_id: USUARIO_ACTUAL.id,
+    observaciones: document.getElementById('ie-observaciones').value.trim() || null
+  };
+  const { error } = await supabase.from('ingresos_egresos').insert(registro);
+  if (error) { alert('Error al guardar: ' + error.message); return; }
+  document.getElementById('ingreso-egreso-form').classList.add('oculto');
+  cargarListaIngresosEgresos();
+};
+
+// ---------- Init ----------
+(async function init() {
+  aplicarConfigDesdeLink();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    const ok = await cargarUsuarioActual();
+    if (ok) { irAHome(); return; }
+  }
+  mostrarPantalla('empleado');
 })();
 </script>
 </body>
