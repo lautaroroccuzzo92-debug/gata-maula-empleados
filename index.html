@@ -469,7 +469,7 @@
 // ============================================================
 const SUPABASE_URL = 'https://flawxsfxeomdvxhhtnly.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsYXd4c2Z4ZW9tZHZ4aGh0bmx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MTkwMTgsImV4cCI6MjEwNTQ5NTAxOH0.zP0t_P8gJAJyOVAgIFN--HkCmTGvGZdUoHoFpVyh9ZU';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const CATEGORIAS = ['FIAMBRES Y QUESOS','VERMUT','COCINA','INSUMOS DE LIMPIEZA','PAN','DESCARTABLES','VERDULERÍA','COMIDA DE PERSONAL','OTROS'];
 
@@ -487,7 +487,7 @@ let LISTA_INSUMOS = []; // { id, nombre, precio_costo_kg, subcategoria } — par
 let USUARIO_ACTUAL = null; // { id, nombre, rol }
 
 async function tokenSesion() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   return session ? session.access_token : null;
 }
 
@@ -517,7 +517,7 @@ function mejorCandidato(nombre, lista) {
 
 async function cargarListas() {
   try {
-    const { data: prov } = await supabase.from('proveedores').select('nombre').order('nombre');
+    const { data: prov } = await sb.from('proveedores').select('nombre').order('nombre');
     LISTA_PROVEEDORES = (prov || []).map(p => p.nombre);
   } catch (e) {
     // Si falla, seguimos con texto libre, sin bloquear la app.
@@ -526,7 +526,7 @@ async function cargarListas() {
 
 async function cargarInsumos() {
   try {
-    const { data } = await supabase.from('insumos').select('id,nombre,precio_costo_kg,subcategoria').order('nombre');
+    const { data } = await sb.from('insumos').select('id,nombre,precio_costo_kg,subcategoria').order('nombre');
     LISTA_INSUMOS = data || [];
   } catch (e) {
     LISTA_INSUMOS = [];
@@ -558,7 +558,7 @@ document.getElementById('btn-login').onclick = async () => {
   // El usuario escribe solo su nombre de usuario (ej. "manu"); internamente
   // Supabase Auth necesita un email, así que completamos el dominio interno.
   const email = usuario.includes('@') ? usuario : `${usuario.toLowerCase()}@gatamaula.local`;
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) {
     errorDiv.textContent = 'Usuario o contraseña incorrectos.';
     return;
@@ -568,7 +568,7 @@ document.getElementById('btn-login').onclick = async () => {
 };
 
 document.getElementById('btn-cambiar-empleado').onclick = async () => {
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   USUARIO_ACTUAL = null;
   document.getElementById('login-email').value = '';
   document.getElementById('login-password').value = '';
@@ -576,9 +576,9 @@ document.getElementById('btn-cambiar-empleado').onclick = async () => {
 };
 
 async function cargarUsuarioActual() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   if (!session) { USUARIO_ACTUAL = null; return false; }
-  const { data, error } = await supabase.from('usuarios').select('id,nombre,rol').eq('id', session.user.id).single();
+  const { data, error } = await sb.from('usuarios').select('id,nombre,rol').eq('id', session.user.id).single();
   if (error || !data) { USUARIO_ACTUAL = null; return false; }
   USUARIO_ACTUAL = data;
   return true;
@@ -1096,7 +1096,7 @@ document.getElementById('btn-guardar-desperdicio').onclick = async () => {
   if (!insumoId) { resDiv.innerHTML = '<div class="estado-box estado-error">Elegí un insumo de la lista.</div>'; return; }
   if (!cantidad || cantidad <= 0) { resDiv.innerHTML = '<div class="estado-box estado-error">Ingresá una cantidad válida.</div>'; return; }
   if (!motivo) { resDiv.innerHTML = '<div class="estado-box estado-error">Ingresá un motivo.</div>'; return; }
-  const { data, error } = await supabase.rpc('registrar_desperdicio', {
+  const { data, error } = await sb.rpc('registrar_desperdicio', {
     p_insumo_id: insumoId, p_cantidad: cantidad, p_motivo: motivo, p_fecha: fecha
   });
   if (error) {
@@ -1112,7 +1112,7 @@ document.getElementById('btn-guardar-desperdicio').onclick = async () => {
 document.getElementById('btn-nav-stock').onclick = async () => {
   const cont = document.getElementById('stock-lista');
   cont.innerHTML = 'Cargando...';
-  const { data, error } = await supabase.from('stock').select('cantidad_actual,stock_minimo,insumos(nombre,subcategoria)').order('insumo_id');
+  const { data, error } = await sb.from('stock').select('cantidad_actual,stock_minimo,insumos(nombre,subcategoria)').order('insumo_id');
   if (error) {
     cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`;
   } else if (!data || !data.length) {
@@ -1144,7 +1144,7 @@ document.getElementById('btn-volver-recetas').onclick = () => mostrarPantalla('h
 async function cargarListaRecetas() {
   const cont = document.getElementById('recetas-lista');
   cont.innerHTML = 'Cargando...';
-  const { data, error } = await supabase.from('recetas').select('*').order('nombre_producto');
+  const { data, error } = await sb.from('recetas').select('*').order('nombre_producto');
   if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
   if (!data || !data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay recetas cargadas.</div>'; return; }
   cont.innerHTML = data.map(r => `
@@ -1170,8 +1170,8 @@ async function abrirFormReceta(id) {
   document.getElementById('receta-id').value = id || '';
   recetaInsumoRows = [];
   if (id) {
-    const { data: receta } = await supabase.from('recetas').select('*').eq('id', id).single();
-    const { data: insumosReceta } = await supabase.from('receta_insumos').select('insumo_id,cantidad_gramos,insumos(nombre)').eq('receta_id', id);
+    const { data: receta } = await sb.from('recetas').select('*').eq('id', id).single();
+    const { data: insumosReceta } = await sb.from('receta_insumos').select('insumo_id,cantidad_gramos,insumos(nombre)').eq('receta_id', id);
     document.getElementById('receta-nombre').value = receta.nombre_producto;
     document.getElementById('receta-categoria').value = receta.categoria_carta;
     document.getElementById('receta-preparacion').value = receta.preparacion || '';
@@ -1268,14 +1268,14 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
 
   let recetaId = id;
   if (recetaId) {
-    const { error: errUpd } = await supabase.from('recetas').update({
+    const { error: errUpd } = await sb.from('recetas').update({
       nombre_producto: nombre, categoria_carta: categoria, preparacion,
       margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
     }).eq('id', recetaId);
     if (errUpd) { alert('Error al guardar: ' + errUpd.message); return; }
-    await supabase.from('receta_insumos').delete().eq('receta_id', recetaId);
+    await sb.from('receta_insumos').delete().eq('receta_id', recetaId);
   } else {
-    const { data, error } = await supabase.from('recetas').insert({
+    const { data, error } = await sb.from('recetas').insert({
       nombre_producto: nombre, categoria_carta: categoria, preparacion,
       margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
     }).select('id').single();
@@ -1284,7 +1284,7 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
   }
 
   const filas = filasValidas.map(r => ({ receta_id: recetaId, insumo_id: r.insumo_id, cantidad_gramos: r.cantidad_gramos }));
-  const { error: errIns } = await supabase.from('receta_insumos').insert(filas);
+  const { error: errIns } = await sb.from('receta_insumos').insert(filas);
   if (errIns) { alert('Error al guardar insumos: ' + errIns.message); return; }
 
   document.getElementById('receta-form').classList.add('oculto');
@@ -1323,7 +1323,7 @@ document.getElementById('btn-guardar-caja').onclick = async () => {
     efectivo: Number(document.getElementById('caja-efectivo').value || 0),
     usuario_id: USUARIO_ACTUAL.id
   };
-  const { error } = await supabase.from('caja_diaria').upsert(registro, { onConflict: 'fecha' });
+  const { error } = await sb.from('caja_diaria').upsert(registro, { onConflict: 'fecha' });
   if (error) resDiv.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`;
   else resDiv.innerHTML = '<div class="estado-box estado-ok">✅ Cierre guardado.</div>';
 };
@@ -1339,7 +1339,7 @@ document.getElementById('btn-volver-ingresos').onclick = () => mostrarPantalla('
 async function cargarListaIngresosEgresos() {
   const cont = document.getElementById('ingresos-lista');
   cont.innerHTML = 'Cargando...';
-  const { data, error } = await supabase.from('ingresos_egresos').select('*').order('fecha', { ascending: false }).limit(30);
+  const { data, error } = await sb.from('ingresos_egresos').select('*').order('fecha', { ascending: false }).limit(30);
   if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
   if (!data || !data.length) { cont.innerHTML = '<div class="aviso">No hay movimientos cargados.</div>'; return; }
   cont.innerHTML = data.map(m => `
@@ -1354,7 +1354,7 @@ async function cargarListaIngresosEgresos() {
   cont.querySelectorAll('.btn-marcar-pagado').forEach(btn => {
     btn.onclick = async () => {
       btn.disabled = true;
-      const { error: errUpd } = await supabase.from('ingresos_egresos')
+      const { error: errUpd } = await sb.from('ingresos_egresos')
         .update({ estado_pago: 'pagado', fecha_pago: new Date().toISOString().slice(0,10) })
         .eq('id', btn.dataset.id);
       if (errUpd) { alert('Error: ' + errUpd.message); btn.disabled = false; }
@@ -1396,11 +1396,11 @@ document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
 
   let proveedorId = null;
   if (proveedorNombre) {
-    const { data: existente } = await supabase.from('proveedores').select('id').ilike('nombre', proveedorNombre).maybeSingle();
+    const { data: existente } = await sb.from('proveedores').select('id').ilike('nombre', proveedorNombre).maybeSingle();
     if (existente) {
       proveedorId = existente.id;
     } else {
-      const { data: nuevo, error: errProv } = await supabase.from('proveedores').insert({ nombre: proveedorNombre }).select('id').single();
+      const { data: nuevo, error: errProv } = await sb.from('proveedores').insert({ nombre: proveedorNombre }).select('id').single();
       if (!errProv) proveedorId = nuevo.id;
     }
   }
@@ -1420,7 +1420,7 @@ document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
     usuario_id: USUARIO_ACTUAL.id,
     observaciones: document.getElementById('ie-observaciones').value.trim() || null
   };
-  const { error } = await supabase.from('ingresos_egresos').insert(registro);
+  const { error } = await sb.from('ingresos_egresos').insert(registro);
   if (error) { alert('Error al guardar: ' + error.message); return; }
   document.getElementById('ingreso-egreso-form').classList.add('oculto');
   cargarListaIngresosEgresos();
@@ -1429,7 +1429,7 @@ document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
 // ---------- Init ----------
 (async function init() {
   aplicarConfigDesdeLink();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   if (session) {
     const ok = await cargarUsuarioActual();
     if (ok) { irAHome(); return; }
