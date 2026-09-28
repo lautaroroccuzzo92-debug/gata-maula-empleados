@@ -129,6 +129,19 @@
   .total-vivo{font-size:22px;font-weight:700;text-align:center;margin:10px 0;}
   .pill-pendiente{background:var(--rojo);}
   .pill-pagado{background:var(--verde);}
+  .grupo-stock{
+    background:rgba(255,255,255,0.55); border:1px solid rgba(26,26,26,0.15);
+    border-radius:14px; margin-bottom:10px; overflow:hidden;
+  }
+  .grupo-stock summary{
+    padding:14px 16px; font-weight:700; cursor:pointer; list-style:none;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .grupo-stock summary::-webkit-details-marker{display:none;}
+  .grupo-stock summary::after{content:'▸'; font-size:13px; transition:transform 0.15s;}
+  .grupo-stock[open] summary::after{transform:rotate(90deg);}
+  .grupo-cant{font-weight:400; color:var(--gris); font-size:13px;}
+  .grupo-stock-body{padding:0 10px 10px;}
 </style>
 </head>
 <body>
@@ -1158,6 +1171,7 @@ function renderStockLista(filtro) {
 
   const ordenFinal = ORDEN_SUBCATEGORIAS.filter(s => grupos[s]).concat(Object.keys(grupos).filter(s => !ORDEN_SUBCATEGORIAS.includes(s)));
 
+  const hayFiltro = !!texto;
   cont.innerHTML = ordenFinal.map(sub => {
     const items = grupos[sub].sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
     const filas = items.map(s => {
@@ -1168,7 +1182,10 @@ function renderStockLista(filtro) {
       </div>`;
     }).join('');
     const etiqueta = ETIQUETA_SUBCATEGORIA[sub] || sub;
-    return `<h2 class="section-title">${etiqueta}</h2>${filas}`;
+    return `<details class="grupo-stock"${hayFiltro ? ' open' : ''}>
+      <summary>${etiqueta} <span class="grupo-cant">(${items.length})</span></summary>
+      <div class="grupo-stock-body">${filas}</div>
+    </details>`;
   }).join('');
 }
 document.getElementById('btn-volver-stock').onclick = () => mostrarPantalla('home');
