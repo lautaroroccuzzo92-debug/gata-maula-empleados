@@ -433,6 +433,7 @@
   <!-- PANTALLA: STOCK (lectura) -->
   <div id="pantalla-stock" class="oculto">
     <h2 class="section-title" style="margin-top:0">Stock</h2>
+    <input type="text" id="stock-buscador" placeholder="Buscar insumo...">
     <div id="stock-lista"></div>
     <button class="secundario" id="btn-volver-stock">Volver</button>
   </div>
@@ -1108,26 +1109,68 @@ document.getElementById('btn-guardar-desperdicio').onclick = async () => {
   }
 };
 
-// ---------- Stock (lectura) ----------
+// ---------- Stock (lectura, con buscador y agrupado por categoría) ----------
+let STOCK_DATA = [];
+const ORDEN_SUBCATEGORIAS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'panes', 'cocina'];
+const ETIQUETA_SUBCATEGORIA = {
+  'vermut': 'Vermut', 'cerveza y sin alcohol': 'Cerveza y sin alcohol', 'fiambres': 'Fiambres',
+  'quesos': 'Quesos', 'panes': 'Panes', 'cocina': 'Cocina'
+};
+
 document.getElementById('btn-nav-stock').onclick = async () => {
   const cont = document.getElementById('stock-lista');
   cont.innerHTML = 'Cargando...';
+  document.getElementById('stock-buscador').value = '';
   const { data, error } = await sb.from('stock').select('cantidad_actual,stock_minimo,insumos(nombre,subcategoria)').order('insumo_id');
   if (error) {
     cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`;
-  } else if (!data || !data.length) {
-    cont.innerHTML = '<div class="aviso">Todavía no hay insumos con stock cargado.</div>';
+    STOCK_DATA = [];
   } else {
-    cont.innerHTML = data.map(s => {
-      const bajo = Number(s.cantidad_actual) <= Number(s.stock_minimo);
-      return `<div class="lista-item">
-        <div><div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div><div class="sub">${s.insumos?.subcategoria || ''}</div></div>
-        <div class="${bajo ? 'bajo-minimo' : ''}">${Number(s.cantidad_actual).toLocaleString('es-AR')}${bajo ? ' ⚠️' : ''}</div>
-      </div>`;
-    }).join('');
+    STOCK_DATA = data || [];
+    renderStockLista('');
   }
   mostrarPantalla('stock');
 };
+
+document.getElementById('stock-buscador').addEventListener('input', (e) => {
+  renderStockLista(e.target.value);
+});
+
+function renderStockLista(filtro) {
+  const cont = document.getElementById('stock-lista');
+  if (!STOCK_DATA.length) {
+    cont.innerHTML = '<div class="aviso">Todavía no hay insumos con stock cargado.</div>';
+    return;
+  }
+  const texto = normalizarTexto((filtro || '').trim());
+  const filtrado = STOCK_DATA.filter(s => !texto || normalizarTexto(s.insumos?.nombre || '').indexOf(texto) >= 0);
+  if (!filtrado.length) {
+    cont.innerHTML = '<div class="aviso">No hay insumos que coincidan con la búsqueda.</div>';
+    return;
+  }
+
+  const grupos = {};
+  filtrado.forEach(s => {
+    const sub = s.insumos?.subcategoria || 'otros';
+    if (!grupos[sub]) grupos[sub] = [];
+    grupos[sub].push(s);
+  });
+
+  const ordenFinal = ORDEN_SUBCATEGORIAS.filter(s => grupos[s]).concat(Object.keys(grupos).filter(s => !ORDEN_SUBCATEGORIAS.includes(s)));
+
+  cont.innerHTML = ordenFinal.map(sub => {
+    const items = grupos[sub].sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
+    const filas = items.map(s => {
+      const bajo = Number(s.cantidad_actual) <= Number(s.stock_minimo);
+      return `<div class="lista-item">
+        <div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div>
+        <div class="${bajo ? 'bajo-minimo' : ''}">${Number(s.cantidad_actual).toLocaleString('es-AR')}${bajo ? ' ⚠️' : ''}</div>
+      </div>`;
+    }).join('');
+    const etiqueta = ETIQUETA_SUBCATEGORIA[sub] || sub;
+    return `<h2 class="section-title">${etiqueta}</h2>${filas}`;
+  }).join('');
+}
 document.getElementById('btn-volver-stock').onclick = () => mostrarPantalla('home');
 
 // ---------- Recetas ----------
@@ -1157,7 +1200,19 @@ async function cargarListaRecetas() {
     </div>
   `).join('');
   cont.querySelectorAll('.btn-editar-receta').forEach(btn => {
-    btn.onclick = () => abrirFormReceta(btn.dataset.id);
+    btn.onclick = async () => {
+      const textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Cargando...';
+      try {
+        await abrirFormReceta(btn.dataset.id);
+      } catch (e) {
+        alert('Error inesperado al abrir la receta: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+      }
+    };
   });
 }
 
@@ -1170,8 +1225,15 @@ async function abrirFormReceta(id) {
   document.getElementById('receta-id').value = id || '';
   recetaInsumoRows = [];
   if (id) {
-    const { data: receta } = await sb.from('recetas').select('*').eq('id', id).single();
-    const { data: insumosReceta } = await sb.from('receta_insumos').select('insumo_id,cantidad_gramos,insumos(nombre)').eq('receta_id', id);
+    const { data: receta, error: errReceta } = await sb.from('recetas').select('*').eq('id', id).single();
+    if (errReceta || !receta) {
+      alert('No se pudo abrir la receta: ' + (errReceta ? errReceta.message : 'no encontrada'));
+      return;
+    }
+    const { data: insumosReceta, error: errInsumos } = await sb.from('receta_insumos').select('insumo_id,cantidad_gramos,insumos(nombre)').eq('receta_id', id);
+    if (errInsumos) {
+      alert('La receta se abrió, pero no se pudieron cargar sus ingredientes: ' + errInsumos.message);
+    }
     document.getElementById('receta-nombre').value = receta.nombre_producto;
     document.getElementById('receta-categoria').value = receta.categoria_carta;
     document.getElementById('receta-preparacion').value = receta.preparacion || '';
