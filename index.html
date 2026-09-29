@@ -1226,7 +1226,7 @@ function renderStockLista(filtro) {
 document.getElementById('btn-volver-stock').onclick = () => mostrarPantalla('home');
 
 // ---------- Recetas ----------
-let recetaInsumoRows = []; // {insumo_id, nombre, cantidad_gramos}
+let recetaInsumoRows = []; // {insumo_id, nombre, cantidad, tipo_medida: 'gramos'|'unidad'}
 
 document.getElementById('btn-nav-recetas').onclick = async () => {
   await cargarInsumos();
@@ -1282,7 +1282,7 @@ async function abrirFormReceta(id) {
       alert('No se pudo abrir la receta: ' + (errReceta ? errReceta.message : 'no encontrada'));
       return;
     }
-    const { data: insumosReceta, error: errInsumos } = await sb.from('receta_insumos').select('insumo_id,cantidad_gramos,insumos(nombre)').eq('receta_id', id);
+    const { data: insumosReceta, error: errInsumos } = await sb.from('receta_insumos').select('insumo_id,cantidad,tipo_medida,insumos(nombre)').eq('receta_id', id);
     if (errInsumos) {
       alert('La receta se abrió, pero no se pudieron cargar sus ingredientes: ' + errInsumos.message);
     }
@@ -1290,7 +1290,7 @@ async function abrirFormReceta(id) {
     document.getElementById('receta-categoria').value = receta.categoria_carta;
     document.getElementById('receta-preparacion').value = receta.preparacion || '';
     document.getElementById('receta-margen').value = receta.margen_objetivo;
-    recetaInsumoRows = (insumosReceta || []).map(ri => ({ insumo_id: ri.insumo_id, nombre: ri.insumos?.nombre || '', cantidad_gramos: ri.cantidad_gramos }));
+    recetaInsumoRows = (insumosReceta || []).map(ri => ({ insumo_id: ri.insumo_id, nombre: ri.insumos?.nombre || '', cantidad: ri.cantidad, tipo_medida: ri.tipo_medida || 'gramos' }));
   } else {
     document.getElementById('receta-nombre').value = '';
     document.getElementById('receta-categoria').value = '';
@@ -1301,18 +1301,32 @@ async function abrirFormReceta(id) {
   document.getElementById('receta-form').classList.remove('oculto');
 }
 
+function costoDeFila(row, insumo) {
+  if (!insumo || !row.cantidad) return 0;
+  if (row.tipo_medida === 'unidad') return row.cantidad * Number(insumo.precio_costo_kg);
+  return (row.cantidad / 1000) * Number(insumo.precio_costo_kg);
+}
+
 function renderRecetaInsumos() {
   const cont = document.getElementById('receta-insumos-lista');
   cont.innerHTML = '';
   recetaInsumoRows.forEach((row, idx) => {
+    if (!row.tipo_medida) row.tipo_medida = 'gramos';
     const div = document.createElement('div');
     div.className = 'producto-row';
     div.innerHTML = `
       <label style="margin-top:0">Insumo</label>
       <input type="text" class="ri-nombre" value="${row.nombre}" placeholder="Buscar insumo...">
       <div class="ri-sugerencias oculto" style="margin-top:6px"></div>
-      <label>Cantidad (gramos/ml)</label>
-      <input type="number" step="1" class="ri-cantidad" value="${row.cantidad_gramos || ''}">
+      <div class="fila2" style="margin-top:8px">
+        <div><label style="margin-top:0">Cantidad</label><input type="number" step="0.01" class="ri-cantidad" value="${row.cantidad || ''}"></div>
+        <div><label style="margin-top:0">Se mide por</label>
+          <select class="ri-tipo-medida">
+            <option value="gramos" ${row.tipo_medida === 'gramos' ? 'selected' : ''}>Gramos/ml</option>
+            <option value="unidad" ${row.tipo_medida === 'unidad' ? 'selected' : ''}>Unidad (ej: 1 pan, 1 packaging)</option>
+          </select>
+        </div>
+      </div>
       <button class="quitar-producto">✕ Quitar insumo</button>
     `;
     const inputNombre = div.querySelector('.ri-nombre');
@@ -1336,7 +1350,11 @@ function renderRecetaInsumos() {
       });
     });
     div.querySelector('.ri-cantidad').addEventListener('input', (e) => {
-      row.cantidad_gramos = Number(e.target.value || 0);
+      row.cantidad = Number(e.target.value || 0);
+      actualizarPreviewCosto();
+    });
+    div.querySelector('.ri-tipo-medida').addEventListener('change', (e) => {
+      row.tipo_medida = e.target.value;
       actualizarPreviewCosto();
     });
     div.querySelector('.quitar-producto').onclick = () => {
@@ -1351,14 +1369,13 @@ function renderRecetaInsumos() {
 function actualizarPreviewCosto() {
   const costo = recetaInsumoRows.reduce((acc, row) => {
     const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
-    if (!insumo || !row.cantidad_gramos) return acc;
-    return acc + (row.cantidad_gramos / 1000) * Number(insumo.precio_costo_kg);
+    return acc + costoDeFila(row, insumo);
   }, 0);
   document.getElementById('receta-costo-preview').textContent = `$${costo.toLocaleString('es-AR',{minimumFractionDigits:2})}`;
 }
 
 document.getElementById('btn-agregar-insumo-receta').onclick = () => {
-  recetaInsumoRows.push({ insumo_id: null, nombre: '', cantidad_gramos: null });
+  recetaInsumoRows.push({ insumo_id: null, nombre: '', cantidad: null, tipo_medida: 'gramos' });
   renderRecetaInsumos();
 };
 
@@ -1368,13 +1385,13 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
   const categoria = document.getElementById('receta-categoria').value.trim();
   const preparacion = document.getElementById('receta-preparacion').value.trim();
   const margen = Number(document.getElementById('receta-margen').value || 0);
-  const filasValidas = recetaInsumoRows.filter(r => r.insumo_id && r.cantidad_gramos > 0);
+  const filasValidas = recetaInsumoRows.filter(r => r.insumo_id && r.cantidad > 0);
   if (!nombre || !categoria) { alert('Completá nombre y categoría.'); return; }
   if (!filasValidas.length) { alert('Agregá al menos un insumo con cantidad.'); return; }
 
   const costoTotal = filasValidas.reduce((acc, row) => {
     const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
-    return acc + (row.cantidad_gramos / 1000) * Number(insumo.precio_costo_kg);
+    return acc + costoDeFila(row, insumo);
   }, 0);
   // Markup simple sobre costo — fórmula de respaldo hasta definir el
   // criterio real de pricing (ver "Fase 2+" del plan).
@@ -1397,7 +1414,7 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
     recetaId = data.id;
   }
 
-  const filas = filasValidas.map(r => ({ receta_id: recetaId, insumo_id: r.insumo_id, cantidad_gramos: r.cantidad_gramos }));
+  const filas = filasValidas.map(r => ({ receta_id: recetaId, insumo_id: r.insumo_id, cantidad: r.cantidad, tipo_medida: r.tipo_medida || 'gramos' }));
   const { error: errIns } = await sb.from('receta_insumos').insert(filas);
   if (errIns) { alert('Error al guardar insumos: ' + errIns.message); return; }
 
