@@ -142,6 +142,12 @@
   .grupo-stock[open] summary::after{transform:rotate(90deg);}
   .grupo-cant{font-weight:400; color:var(--gris); font-size:13px;}
   .grupo-stock-body{padding:0 10px 10px;}
+  .desglose-costeo{font-size:13.5px; margin-bottom:10px;}
+  .desglose-fila{display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(26,26,26,0.08);}
+  .desglose-fila.total{font-weight:700; border-bottom:none; padding-top:8px;}
+  .margen-real-box{margin-top:10px; padding:12px; border-radius:10px; font-size:14px; font-weight:600;}
+  .margen-ok{background:rgba(58,125,68,0.15); color:var(--verde);}
+  .margen-bajo{background:rgba(168,50,50,0.15); color:var(--rojo);}
   .stock-edit-wrap{display:flex; align-items:center; gap:8px; flex:none;}
   .stock-cantidad-input{width:80px !important; padding:8px !important; text-align:right;}
   .stock-guardado{font-size:12px; color:var(--verde); font-weight:700; white-space:nowrap; min-width:0;}
@@ -353,8 +359,12 @@
       <div id="receta-insumos-lista"></div>
       <button class="agregar-producto" id="btn-agregar-insumo-receta">+ Agregar insumo</button>
       <div class="card">
-        <div class="aviso">Costo total y precio sugerido se calculan al guardar.</div>
-        <div class="total-vivo" id="receta-costo-preview">$0,00</div>
+        <h2 class="section-title" style="margin-top:0">Costeo (igual al Excel)</h2>
+        <div id="receta-desglose" class="desglose-costeo"></div>
+        <label>Precio en la carta ($)</label>
+        <input type="number" step="1" id="receta-precio-carta">
+        <div class="aviso">Este es el que vos redondeás mirando la competencia — el resto se recalcula solo.</div>
+        <div id="receta-margen-real" class="margen-real-box"></div>
       </div>
       <button class="big" id="btn-guardar-receta">Guardar receta</button>
       <button class="secundario" id="btn-cancelar-receta">Cancelar</button>
@@ -489,6 +499,13 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const CATEGORIAS = ['FIAMBRES Y QUESOS','VERMUT','COCINA','INSUMOS DE LIMPIEZA','PAN','DESCARTABLES','VERDULERÍA','COMIDA DE PERSONAL','OTROS'];
+
+// Constantes del costeo de carta (mismas que el Excel de PPTO). Fijas por
+// ahora — si cambian algún día, se actualizan acá.
+const COSTO_FIJO_PCT = 0.32;
+const COSTO_FINANCIERO_PCT = 0.02034816667;
+const IVA_PCT_RECETA = 0.21;
+const MARGEN_OBJETIVO_COMIDA = 0.65;
 
 function cfg(key) {
   return localStorage.getItem('gm_' + key) || '';
@@ -1227,6 +1244,27 @@ document.getElementById('btn-volver-stock').onclick = () => mostrarPantalla('hom
 
 // ---------- Recetas ----------
 let recetaInsumoRows = []; // {insumo_id, nombre, cantidad, tipo_medida: 'gramos'|'unidad'}
+let precioCartaEditadoManualmente = false;
+
+// Misma cadena de cálculo que el Excel de PPTO:
+// Costo Variable -> Costo Fijo (32%) -> Costo Total -> (con margen K)
+// Precio venta s/CF -> Costo Financiero (2,035%) -> Precio de Venta -> IVA 21% -> PV
+function calcularCosteoCompleto(costoVariable, margenPct) {
+  const k = (margenPct || 0) / 100;
+  const costoFijo = costoVariable * COSTO_FIJO_PCT;
+  const costoTotal = costoVariable + costoFijo;
+  const denominador = 1 - k;
+  const precioVentaSCF = (k >= 1 || k < 0 || denominador === 0) ? costoTotal : (costoTotal * (1 + k)) / denominador;
+  const costoFinanciero = precioVentaSCF * COSTO_FINANCIERO_PCT;
+  const precioVenta = Math.ceil(precioVentaSCF + costoFinanciero);
+  const iva = precioVenta * IVA_PCT_RECETA;
+  const pv = precioVenta + iva;
+  return { costoVariable, costoFijo, costoTotal, precioVentaSCF, costoFinanciero, precioVenta, iva, pv };
+}
+
+function formatoPesos(n) {
+  return `$${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 document.getElementById('btn-nav-recetas').onclick = async () => {
   await cargarInsumos();
@@ -1291,11 +1329,15 @@ async function abrirFormReceta(id) {
     document.getElementById('receta-preparacion').value = receta.preparacion || '';
     document.getElementById('receta-margen').value = receta.margen_objetivo;
     recetaInsumoRows = (insumosReceta || []).map(ri => ({ insumo_id: ri.insumo_id, nombre: ri.insumos?.nombre || '', cantidad: ri.cantidad, tipo_medida: ri.tipo_medida || 'gramos' }));
+    document.getElementById('receta-precio-carta').value = receta.precio_venta_sugerido ? Math.round(receta.precio_venta_sugerido) : '';
+    precioCartaEditadoManualmente = true; // ya tiene un precio de carta guardado, no lo pisamos con la sugerencia
   } else {
     document.getElementById('receta-nombre').value = '';
     document.getElementById('receta-categoria').value = '';
     document.getElementById('receta-preparacion').value = '';
     document.getElementById('receta-margen').value = 65;
+    document.getElementById('receta-precio-carta').value = '';
+    precioCartaEditadoManualmente = false;
   }
   renderRecetaInsumos();
   document.getElementById('receta-form').classList.remove('oculto');
@@ -1367,12 +1409,51 @@ function renderRecetaInsumos() {
 }
 
 function actualizarPreviewCosto() {
-  const costo = recetaInsumoRows.reduce((acc, row) => {
+  const costoVariable = recetaInsumoRows.reduce((acc, row) => {
     const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
     return acc + costoDeFila(row, insumo);
   }, 0);
-  document.getElementById('receta-costo-preview').textContent = `$${costo.toLocaleString('es-AR',{minimumFractionDigits:2})}`;
+  const margenPct = Number(document.getElementById('receta-margen').value || 0);
+  const c = calcularCosteoCompleto(costoVariable, margenPct);
+
+  document.getElementById('receta-desglose').innerHTML = `
+    <div class="desglose-fila"><span>Costo Variable (insumos)</span><span>${formatoPesos(c.costoVariable)}</span></div>
+    <div class="desglose-fila"><span>Costo Fijo (32%)</span><span>${formatoPesos(c.costoFijo)}</span></div>
+    <div class="desglose-fila total"><span>Costo Total</span><span>${formatoPesos(c.costoTotal)}</span></div>
+    <div class="desglose-fila"><span>Precio de venta s/CF (margen ${margenPct}%)</span><span>${formatoPesos(c.precioVentaSCF)}</span></div>
+    <div class="desglose-fila"><span>Costo Financiero (2,035%)</span><span>${formatoPesos(c.costoFinanciero)}</span></div>
+    <div class="desglose-fila"><span>Precio de Venta</span><span>${formatoPesos(c.precioVenta)}</span></div>
+    <div class="desglose-fila"><span>IVA 21%</span><span>${formatoPesos(c.iva)}</span></div>
+    <div class="desglose-fila total"><span>PV (referencia)</span><span>${formatoPesos(c.pv)}</span></div>
+  `;
+
+  const inputPrecioCarta = document.getElementById('receta-precio-carta');
+  if (!precioCartaEditadoManualmente) {
+    inputPrecioCarta.value = Math.round(c.pv);
+  }
+
+  actualizarMargenReal(c.costoVariable);
 }
+
+function actualizarMargenReal(costoVariable) {
+  const precioCarta = Number(document.getElementById('receta-precio-carta').value || 0);
+  const box = document.getElementById('receta-margen-real');
+  if (!precioCarta) { box.innerHTML = ''; box.className = 'margen-real-box'; return; }
+  const netoCarta = precioCarta / (1 + IVA_PCT_RECETA);
+  const margenReal = netoCarta > 0 ? (netoCarta - costoVariable) / netoCarta : 0;
+  const ok = margenReal >= MARGEN_OBJETIVO_COMIDA;
+  box.className = 'margen-real-box ' + (ok ? 'margen-ok' : 'margen-bajo');
+  box.innerHTML = `Neto de carta: ${formatoPesos(netoCarta)} — Margen real: ${(margenReal * 100).toFixed(1)}% ${ok ? '✅ (objetivo 65%+)' : '⚠️ (objetivo 65%+)'}`;
+}
+
+document.getElementById('receta-margen').addEventListener('input', actualizarPreviewCosto);
+document.getElementById('receta-precio-carta').addEventListener('input', () => {
+  precioCartaEditadoManualmente = true;
+  actualizarMargenReal(recetaInsumoRows.reduce((acc, row) => {
+    const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
+    return acc + costoDeFila(row, insumo);
+  }, 0));
+});
 
 document.getElementById('btn-agregar-insumo-receta').onclick = () => {
   recetaInsumoRows.push({ insumo_id: null, nombre: '', cantidad: null, tipo_medida: 'gramos' });
@@ -1393,9 +1474,10 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
     const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
     return acc + costoDeFila(row, insumo);
   }, 0);
-  // Markup simple sobre costo — fórmula de respaldo hasta definir el
-  // criterio real de pricing (ver "Fase 2+" del plan).
-  const precioSugerido = costoTotal * (1 + margen / 100);
+  // precio_venta_sugerido = el precio de carta real (lo redondeás vos
+  // mirando la competencia), no un cálculo automático.
+  const precioSugerido = Number(document.getElementById('receta-precio-carta').value || 0);
+  if (!precioSugerido) { alert('Completá el precio en la carta.'); return; }
 
   let recetaId = id;
   if (recetaId) {
