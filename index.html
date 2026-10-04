@@ -558,10 +558,24 @@ async function cargarListas() {
   }
 }
 
+// Supabase devuelve como máximo 1000 filas por consulta: traemos todo por páginas.
+async function traerTodo(construirQuery) {
+  const tamano = 1000;
+  let desde = 0;
+  let todo = [];
+  while (true) {
+    const { data, error } = await construirQuery().range(desde, desde + tamano - 1);
+    if (error) throw error;
+    todo = todo.concat(data || []);
+    if (!data || data.length < tamano) break;
+    desde += tamano;
+  }
+  return todo;
+}
+
 async function cargarInsumos() {
   try {
-    const { data } = await sb.from('insumos').select('id,nombre,precio_costo_kg,subcategoria').order('nombre');
-    LISTA_INSUMOS = data || [];
+    LISTA_INSUMOS = await traerTodo(() => sb.from('insumos').select('id,nombre,precio_costo_kg,subcategoria').order('nombre').order('id'));
   } catch (e) {
     LISTA_INSUMOS = [];
   }
@@ -1154,13 +1168,12 @@ document.getElementById('btn-nav-stock').onclick = async () => {
   const cont = document.getElementById('stock-lista');
   cont.innerHTML = 'Cargando...';
   document.getElementById('stock-buscador').value = '';
-  const { data, error } = await sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,insumos(nombre,subcategoria)').order('insumo_id');
-  if (error) {
+  try {
+    STOCK_DATA = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,insumos(nombre,subcategoria)').order('insumo_id'));
+    renderStockLista('');
+  } catch (error) {
     cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`;
     STOCK_DATA = [];
-  } else {
-    STOCK_DATA = data || [];
-    renderStockLista('');
   }
   mostrarPantalla('stock');
 };
