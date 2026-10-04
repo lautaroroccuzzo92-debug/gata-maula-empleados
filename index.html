@@ -351,7 +351,7 @@
         <label style="margin-top:0">Nombre del producto</label>
         <input type="text" id="receta-nombre">
         <label>Categoría en la carta</label>
-        <input type="text" id="receta-categoria" placeholder="vermut, fiambres y quesos, cocina, pan, sandwiches...">
+        <select id="receta-categoria"></select>
         <label>Preparación</label>
         <textarea id="receta-preparacion" placeholder="Paso a paso (opcional)"></textarea>
         <label>Margen objetivo (%)</label>
@@ -1289,21 +1289,60 @@ document.getElementById('btn-nav-recetas').onclick = async () => {
 };
 document.getElementById('btn-volver-recetas').onclick = () => mostrarPantalla('home');
 
+// Lista fija de categorías de carta (el orden es el de la pantalla).
+const CATEGORIAS_RECETA = [
+  'Sandwiches', 'Picadas y platitos', 'Conservas', 'Conito de picada',
+  'Kutsi', 'Sandwiches de Focaccia entera', 'Fuera de carta'
+];
+// Valores viejos (de la primera importación) -> categoría nueva.
+const CATEGORIA_RECETA_LEGACY = {
+  'sandwiches': 'Sandwiches', 'kutsi': 'Kutsi',
+  'picada': 'Picadas y platitos', 'tapeo': 'Picadas y platitos',
+  'conservas de la casa': 'Conservas'
+};
+function normalizarCategoriaReceta(cat) {
+  const c = (cat || '').trim();
+  const exacta = CATEGORIAS_RECETA.find(x => x.toLowerCase() === c.toLowerCase());
+  if (exacta) return exacta;
+  return CATEGORIA_RECETA_LEGACY[c.toLowerCase()] || c;
+}
+function llenarSelectCategoriaReceta(valorActual) {
+  const sel = document.getElementById('receta-categoria');
+  const opciones = CATEGORIAS_RECETA.slice();
+  const actual = valorActual ? normalizarCategoriaReceta(valorActual) : '';
+  if (actual && !opciones.includes(actual)) opciones.push(actual);
+  sel.innerHTML = '<option value="">Elegí una categoría...</option>' +
+    opciones.map(o => `<option value="${o.replace(/"/g, '&quot;')}">${o}</option>`).join('');
+  sel.value = actual;
+}
+
 async function cargarListaRecetas() {
   const cont = document.getElementById('recetas-lista');
   cont.innerHTML = 'Cargando...';
   const { data, error } = await sb.from('recetas').select('*').order('nombre_producto');
   if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
   if (!data || !data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay recetas cargadas.</div>'; return; }
-  cont.innerHTML = data.map(r => `
-    <div class="lista-item">
-      <div>
-        <div class="nombre">${r.nombre_producto}</div>
-        <div class="sub">${r.categoria_carta} · costo $${Number(r.costo_total_calculado||0).toLocaleString('es-AR',{minimumFractionDigits:2})} · sugerido $${Number(r.precio_venta_sugerido||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</div>
-      </div>
-      <button type="button" class="secundario btn-editar-receta" data-id="${r.id}" style="width:auto;padding:8px 14px;margin:0">Editar</button>
-    </div>
-  `).join('');
+  const grupos = {};
+  data.forEach(r => {
+    const cat = normalizarCategoriaReceta(r.categoria_carta) || 'Sin categoría';
+    (grupos[cat] = grupos[cat] || []).push(r);
+  });
+  const ordenFinal = CATEGORIAS_RECETA.filter(c => grupos[c])
+    .concat(Object.keys(grupos).filter(c => !CATEGORIAS_RECETA.includes(c)));
+  cont.innerHTML = ordenFinal.map(cat => {
+    const filas = grupos[cat].map(r => `
+      <div class="lista-item">
+        <div>
+          <div class="nombre">${r.nombre_producto}</div>
+          <div class="sub">costo $${Number(r.costo_total_calculado||0).toLocaleString('es-AR',{minimumFractionDigits:2})} · carta $${Number(r.precio_venta_sugerido||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</div>
+        </div>
+        <button type="button" class="secundario btn-editar-receta" data-id="${r.id}" style="width:auto;padding:8px 14px;margin:0">Editar</button>
+      </div>`).join('');
+    return `<details class="grupo-stock">
+      <summary>${cat} <span class="grupo-cant">(${grupos[cat].length})</span></summary>
+      <div class="grupo-stock-body">${filas}</div>
+    </details>`;
+  }).join('');
   cont.querySelectorAll('.btn-editar-receta').forEach(btn => {
     btn.onclick = async () => {
       const textoOriginal = btn.textContent;
@@ -1340,7 +1379,7 @@ async function abrirFormReceta(id) {
       alert('La receta se abrió, pero no se pudieron cargar sus ingredientes: ' + errInsumos.message);
     }
     document.getElementById('receta-nombre').value = receta.nombre_producto;
-    document.getElementById('receta-categoria').value = receta.categoria_carta;
+    llenarSelectCategoriaReceta(receta.categoria_carta);
     document.getElementById('receta-preparacion').value = receta.preparacion || '';
     document.getElementById('receta-margen').value = receta.margen_objetivo;
     recetaInsumoRows = (insumosReceta || []).map(ri => ({ insumo_id: ri.insumo_id, nombre: ri.insumos?.nombre || '', cantidad: ri.cantidad, tipo_medida: ri.tipo_medida || 'gramos' }));
@@ -1348,7 +1387,7 @@ async function abrirFormReceta(id) {
     precioCartaEditadoManualmente = true; // ya tiene un precio de carta guardado, no lo pisamos con la sugerencia
   } else {
     document.getElementById('receta-nombre').value = '';
-    document.getElementById('receta-categoria').value = '';
+    llenarSelectCategoriaReceta('');
     document.getElementById('receta-preparacion').value = '';
     document.getElementById('receta-margen').value = 65;
     document.getElementById('receta-precio-carta').value = '';
