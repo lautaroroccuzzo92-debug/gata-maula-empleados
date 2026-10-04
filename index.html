@@ -142,6 +142,8 @@
   .grupo-stock[open] summary::after{transform:rotate(90deg);}
   .grupo-cant{font-weight:400; color:var(--gris); font-size:13px;}
   .grupo-stock-body{padding:0 10px 10px;}
+  .ri-costo-linea{margin-top:8px; font-size:13px; font-weight:600; color:var(--verde);}
+  .ri-costo-alerta{color:var(--rojo);}
   .desglose-costeo{font-size:13.5px; margin-bottom:10px;}
   .desglose-fila{display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(26,26,26,0.08);}
   .desglose-fila.total{font-weight:700; border-bottom:none; padding-top:8px;}
@@ -1362,6 +1364,23 @@ function costoDeFila(row, insumo) {
   return (row.cantidad / 1000) * Number(insumo.precio_costo_kg);
 }
 
+function actualizarLineaCosto(el, row) {
+  const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
+  if (!insumo) {
+    el.className = 'ri-costo-linea ri-costo-alerta';
+    el.textContent = '⚠️ No se encontró este insumo en la lista: cuenta $0';
+    return;
+  }
+  const precio = Number(insumo.precio_costo_kg);
+  const costo = costoDeFila(row, insumo);
+  el.className = 'ri-costo-linea';
+  if (row.tipo_medida === 'unidad') {
+    el.textContent = `Precio por unidad: ${formatoPesos(precio)} → ${row.cantidad || 0} u = ${formatoPesos(costo)}`;
+  } else {
+    el.textContent = `Precio por kg: ${formatoPesos(precio)} → ${row.cantidad || 0} g = ${formatoPesos(costo)}`;
+  }
+}
+
 function renderRecetaInsumos() {
   const cont = document.getElementById('receta-insumos-lista');
   cont.innerHTML = '';
@@ -1382,10 +1401,14 @@ function renderRecetaInsumos() {
           </select>
         </div>
       </div>
+      <div class="ri-costo-linea"></div>
       <button class="quitar-producto">✕ Quitar insumo</button>
     `;
     const inputNombre = div.querySelector('.ri-nombre');
     const sugCont = div.querySelector('.ri-sugerencias');
+    const lineaCosto = div.querySelector('.ri-costo-linea');
+    const refrescarLinea = () => actualizarLineaCosto(lineaCosto, row);
+    refrescarLinea();
     inputNombre.addEventListener('input', () => {
       const texto = normalizarTexto(inputNombre.value.trim());
       row.insumo_id = null;
@@ -1400,16 +1423,19 @@ function renderRecetaInsumos() {
           row.insumo_id = b.dataset.id;
           row.nombre = b.textContent;
           sugCont.classList.add('oculto');
+          refrescarLinea();
           actualizarPreviewCosto();
         };
       });
     });
     div.querySelector('.ri-cantidad').addEventListener('input', (e) => {
       row.cantidad = Number(e.target.value || 0);
+      refrescarLinea();
       actualizarPreviewCosto();
     });
     div.querySelector('.ri-tipo-medida').addEventListener('change', (e) => {
       row.tipo_medida = e.target.value;
+      refrescarLinea();
       actualizarPreviewCosto();
     });
     div.querySelector('.quitar-producto').onclick = () => {
