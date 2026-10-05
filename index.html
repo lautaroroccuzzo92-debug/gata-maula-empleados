@@ -218,7 +218,7 @@
         <button class="cap-btn oculto" id="btn-nav-caja"><span class="emoji">💰</span>Caja diaria</button>
         <button class="cap-btn oculto" id="btn-nav-ingresos"><span class="emoji">🧾</span>Ingresos/Egresos</button>
         <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
-        <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Precios de insumos</button>
+        <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Insumos y precios</button>
         <button class="cap-btn oculto" id="btn-nav-alertas"><span class="emoji">🔔</span>Alertas<span class="badge-alertas oculto" id="badge-alertas">0</span></button>
       </div>
     </div>
@@ -371,13 +371,25 @@
         <select id="receta-categoria"></select>
         <label>Preparación</label>
         <textarea id="receta-preparacion" placeholder="Paso a paso (opcional)"></textarea>
-        <label>Margen objetivo (%)</label>
-        <input type="number" step="0.01" id="receta-margen" value="65">
+        <div id="receta-margen-wrap">
+          <label>Margen objetivo (%)</label>
+          <input type="number" step="0.01" id="receta-margen" value="65">
+        </div>
+        <div id="receta-merma-wrap" class="oculto">
+          <label>Merma (%)</label>
+          <input type="number" step="0.01" min="0" max="99" id="receta-merma" value="0">
+          <div class="aviso">Lo que se pierde al cocinar. El costo por kg se calcula sobre lo que queda.</div>
+        </div>
       </div>
       <h2 class="section-title">Insumos de la receta</h2>
       <div id="receta-insumos-lista"></div>
       <button class="agregar-producto" id="btn-agregar-insumo-receta">+ Agregar insumo</button>
-      <div class="card">
+      <div class="card oculto" id="receta-prep-card">
+        <h2 class="section-title" style="margin-top:0">Costo de la preparación</h2>
+        <div id="receta-prep-box" class="desglose-costeo"></div>
+        <div class="aviso">Esta preparación se usa como un insumo más en las recetas. Si cambia el precio de algún ingrediente, se recalcula sola.</div>
+      </div>
+      <div class="card" id="receta-costeo-card">
         <h2 class="section-title" style="margin-top:0">Costeo (igual al Excel)</h2>
         <div id="receta-desglose" class="desglose-costeo"></div>
         <label>Precio en la carta ($)</label>
@@ -496,8 +508,28 @@
 
   <!-- PANTALLA: PRECIOS DE INSUMOS -->
   <div id="pantalla-precios" class="oculto">
-    <h2 class="section-title" style="margin-top:0">Precios de insumos</h2>
-    <div class="aviso">Cambiá el precio cuando te pasen una lista nueva. Las recetas se recalculan solas; el precio de carta no se toca. Si el aumento supera el 7% queda una alerta.</div>
+    <h2 class="section-title" style="margin-top:0">Insumos y precios</h2>
+    <div class="aviso">Es la lista de Costos Variables. Cambiá el precio cuando te pasen una lista nueva: las preparaciones y las recetas se recalculan solas y el precio de carta no se toca. Si el aumento supera el 7% queda una alerta.</div>
+    <button class="agregar-producto" id="btn-nuevo-insumo">+ Nuevo insumo</button>
+    <div id="insumo-nuevo-form" class="card oculto">
+      <h2 class="section-title" style="margin-top:0">Insumo nuevo</h2>
+      <label style="margin-top:0">Categoría</label>
+      <select id="ins-nuevo-categoria"></select>
+      <label>Marca o proveedor (opcional)</label>
+      <input type="text" id="ins-nuevo-marca" placeholder="Ej: LAS DINAS">
+      <label>Descripción</label>
+      <input type="text" id="ins-nuevo-nombre" placeholder="Ej: SALAME MILAN">
+      <div class="fila2">
+        <div><label>Precio ($)</label><input type="number" step="0.01" min="0" id="ins-nuevo-precio"></div>
+        <div><label>El precio es por</label>
+          <select id="ins-nuevo-unidad"><option value="kg">Kg o litro</option><option value="unidad">Unidad</option></select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="ins-nuevo-stock" style="width:auto;margin:0"> Agregarlo al control de stock</label>
+      <div id="ins-nuevo-resultado"></div>
+      <button class="big" id="btn-guardar-insumo-nuevo">Guardar insumo</button>
+      <button class="secundario" id="btn-cancelar-insumo-nuevo">Cancelar</button>
+    </div>
     <input type="text" id="precios-buscador" placeholder="Buscar insumo...">
     <div id="precios-lista"></div>
     <button class="secundario" id="btn-volver-precios">Volver</button>
@@ -614,10 +646,20 @@ async function traerTodo(construirQuery) {
 
 async function cargarInsumos() {
   try {
-    LISTA_INSUMOS = await traerTodo(() => sb.from('insumos').select('id,nombre,precio_costo_kg,subcategoria').order('nombre').order('id'));
+    LISTA_INSUMOS = await traerTodo(() => sb.from('insumos').select('id,nombre,marca,precio_costo_kg,subcategoria,unidad_medida,es_preparacion').order('nombre').order('id'));
   } catch (e) {
     LISTA_INSUMOS = [];
   }
+}
+
+// Nombre para mostrar de un insumo: "descripción · marca" (las preparaciones llevan 🍳).
+function etiquetaInsumo(i) {
+  return (i.es_preparacion ? '🍳 ' : '') + i.nombre + (i.marca && !i.es_preparacion ? ' · ' + i.marca : '');
+}
+// Búsqueda por descripción o marca (todas las palabras tienen que estar).
+function coincideInsumo(i, texto) {
+  const base = normalizarTexto(i.nombre + ' ' + (i.marca || ''));
+  return texto.split(' ').filter(Boolean).every(p => base.indexOf(p) >= 0);
 }
 
 function categoriasDisponibles() {
@@ -1164,9 +1206,9 @@ document.getElementById('desp-insumo-input').addEventListener('input', (e) => {
   const cont = document.getElementById('desp-sugerencias');
   document.getElementById('desp-insumo-id').value = '';
   if (!texto) { cont.classList.add('oculto'); return; }
-  const coincidencias = LISTA_INSUMOS.filter(i => normalizarTexto(i.nombre).indexOf(texto) >= 0).slice(0, 6);
+  const coincidencias = LISTA_INSUMOS.filter(i => !i.es_preparacion && coincideInsumo(i, texto)).slice(0, 8);
   if (!coincidencias.length) { cont.classList.add('oculto'); return; }
-  cont.innerHTML = coincidencias.map(i => `<button type="button" class="secundario desp-sug-item" data-id="${i.id}" style="padding:8px;font-size:13px;margin-bottom:4px">${i.nombre}</button>`).join('');
+  cont.innerHTML = coincidencias.map(i => `<button type="button" class="secundario desp-sug-item" data-id="${i.id}" style="padding:8px;font-size:13px;margin-bottom:4px">${etiquetaInsumo(i)}</button>`).join('');
   cont.classList.remove('oculto');
   cont.querySelectorAll('.desp-sug-item').forEach(btn => {
     btn.onclick = () => {
@@ -1200,10 +1242,10 @@ document.getElementById('btn-guardar-desperdicio').onclick = async () => {
 
 // ---------- Stock (lectura, con buscador y agrupado por categoría) ----------
 let STOCK_DATA = [];
-const ORDEN_SUBCATEGORIAS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'panes', 'cocina'];
+const ORDEN_SUBCATEGORIAS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'kutsi', 'panes', 'descartables', 'cocina'];
 const ETIQUETA_SUBCATEGORIA = {
   'vermut': 'Vermut', 'cerveza y sin alcohol': 'Cerveza y sin alcohol', 'fiambres': 'Fiambres',
-  'quesos': 'Quesos', 'panes': 'Panes', 'cocina': 'Cocina'
+  'quesos': 'Quesos', 'kutsi': 'Kutsi', 'panes': 'Panes', 'descartables': 'Descartables y packaging', 'cocina': 'Cocina'
 };
 
 document.getElementById('btn-nav-stock').onclick = async () => {
@@ -1211,7 +1253,7 @@ document.getElementById('btn-nav-stock').onclick = async () => {
   cont.innerHTML = 'Cargando...';
   document.getElementById('stock-buscador').value = '';
   try {
-    STOCK_DATA = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,insumos(nombre,subcategoria)').order('insumo_id'));
+    STOCK_DATA = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,insumos(nombre,marca,subcategoria)').order('insumo_id'));
     renderStockLista('');
   } catch (error) {
     cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`;
@@ -1231,7 +1273,7 @@ function renderStockLista(filtro) {
     return;
   }
   const texto = normalizarTexto((filtro || '').trim());
-  const filtrado = STOCK_DATA.filter(s => !texto || normalizarTexto(s.insumos?.nombre || '').indexOf(texto) >= 0);
+  const filtrado = STOCK_DATA.filter(s => !texto || (s.insumos ? coincideInsumo(s.insumos, texto) : false));
   if (!filtrado.length) {
     cont.innerHTML = '<div class="aviso">No hay insumos que coincidan con la búsqueda.</div>';
     return;
@@ -1252,7 +1294,7 @@ function renderStockLista(filtro) {
     const filas = items.map(s => {
       const bajo = Number(s.cantidad_actual) <= Number(s.stock_minimo);
       return `<div class="lista-item">
-        <div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div>
+        +'(sin nombre)'}</div>
         <div class="stock-edit-wrap">
           <input type="number" step="0.01" class="stock-cantidad-input ${bajo ? 'bajo-minimo' : ''}" data-insumo-id="${s.insumo_id}" value="${Number(s.cantidad_actual)}">
           <span class="stock-guardado" data-insumo-id="${s.insumo_id}"></span>
@@ -1420,14 +1462,64 @@ async function cargarAlertas() {
 }
 
 // ---------- Precios de insumos (carga manual por lista de precios) ----------
-const ORDEN_SUBCATEGORIAS_PRECIOS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'panes', 'cocina'];
+// Categorías de la hoja Costos Variables (el orden es el de la pantalla).
+const ORDEN_SUBCATEGORIAS_PRECIOS = ['fiambres', 'quesos', 'kutsi', 'vermut', 'cerveza y sin alcohol', 'panes', 'descartables', 'cocina', 'preparaciones'];
+const ETIQUETA_INSUMOS = {
+  'fiambres': 'Fiambres', 'quesos': 'Quesos', 'kutsi': 'Kutsi', 'vermut': 'Vermut',
+  'cerveza y sin alcohol': 'Cerveza y sin alcohol', 'panes': 'Panes',
+  'descartables': 'Descartables y packaging', 'cocina': 'Cocina (otros)', 'preparaciones': 'Preparaciones'
+};
+// Categorías en las que se puede crear un insumo nuevo, y en qué se mide por defecto.
+const CATEGORIAS_NUEVO_INSUMO = [
+  ['fiambres', 'kg'], ['quesos', 'kg'], ['kutsi', 'kg'], ['vermut', 'unidad'],
+  ['cerveza y sin alcohol', 'unidad'], ['panes', 'unidad'], ['descartables', 'unidad']
+];
 
 document.getElementById('btn-nav-precios').onclick = async () => {
   document.getElementById('precios-buscador').value = '';
   document.getElementById('precios-lista').innerHTML = 'Cargando...';
+  document.getElementById('insumo-nuevo-form').classList.add('oculto');
   mostrarPantalla('precios');
   await cargarInsumos();
   renderPrecios('');
+};
+
+document.getElementById('ins-nuevo-categoria').innerHTML = CATEGORIAS_NUEVO_INSUMO
+  .map(([sub]) => `<option value="${sub}">${ETIQUETA_INSUMOS[sub]}</option>`).join('');
+document.getElementById('ins-nuevo-categoria').addEventListener('change', (e) => {
+  const def = CATEGORIAS_NUEVO_INSUMO.find(([sub]) => sub === e.target.value);
+  if (def) document.getElementById('ins-nuevo-unidad').value = def[1];
+});
+document.getElementById('btn-nuevo-insumo').onclick = () => {
+  ['ins-nuevo-marca', 'ins-nuevo-nombre', 'ins-nuevo-precio'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('ins-nuevo-categoria').value = 'fiambres';
+  document.getElementById('ins-nuevo-unidad').value = 'kg';
+  document.getElementById('ins-nuevo-stock').checked = false;
+  document.getElementById('ins-nuevo-resultado').innerHTML = '';
+  document.getElementById('insumo-nuevo-form').classList.remove('oculto');
+};
+document.getElementById('btn-cancelar-insumo-nuevo').onclick = () => {
+  document.getElementById('insumo-nuevo-form').classList.add('oculto');
+};
+document.getElementById('btn-guardar-insumo-nuevo').onclick = async () => {
+  const res = document.getElementById('ins-nuevo-resultado');
+  const nombre = document.getElementById('ins-nuevo-nombre').value.trim();
+  const precioTxt = document.getElementById('ins-nuevo-precio').value;
+  if (!nombre) { res.innerHTML = '<div class="estado-box estado-error">Completá la descripción.</div>'; return; }
+  if (precioTxt === '' || Number(precioTxt) < 0) { res.innerHTML = '<div class="estado-box estado-error">Completá el precio.</div>'; return; }
+  const { error } = await sb.rpc('crear_insumo', {
+    p_nombre: nombre,
+    p_marca: document.getElementById('ins-nuevo-marca').value.trim(),
+    p_subcategoria: document.getElementById('ins-nuevo-categoria').value,
+    p_precio: Number(precioTxt),
+    p_unidad: document.getElementById('ins-nuevo-unidad').value,
+    p_con_stock: document.getElementById('ins-nuevo-stock').checked
+  });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+  document.getElementById('insumo-nuevo-form').classList.add('oculto');
+  document.getElementById('precios-buscador').value = nombre;
+  await cargarInsumos();
+  renderPrecios(nombre);
 };
 document.getElementById('btn-volver-precios').onclick = () => { irAHome(); };
 document.getElementById('precios-buscador').addEventListener('input', (e) => renderPrecios(e.target.value));
@@ -1435,22 +1527,30 @@ document.getElementById('precios-buscador').addEventListener('input', (e) => ren
 function renderPrecios(filtro) {
   const cont = document.getElementById('precios-lista');
   const texto = normalizarTexto((filtro || '').trim());
-  const filtrado = LISTA_INSUMOS.filter(i => !texto || normalizarTexto(i.nombre).indexOf(texto) >= 0);
+  const filtrado = LISTA_INSUMOS.filter(i => !texto || coincideInsumo(i, texto));
   if (!filtrado.length) { cont.innerHTML = '<div class="aviso">No hay insumos que coincidan.</div>'; return; }
   const grupos = {};
-  filtrado.forEach(i => { (grupos[i.subcategoria] = grupos[i.subcategoria] || []).push(i); });
+  filtrado.forEach(i => {
+    const g = i.es_preparacion ? 'preparaciones' : i.subcategoria;
+    (grupos[g] = grupos[g] || []).push(i);
+  });
   const orden = ORDEN_SUBCATEGORIAS_PRECIOS.filter(s => grupos[s]).concat(Object.keys(grupos).filter(s => !ORDEN_SUBCATEGORIAS_PRECIOS.includes(s)));
   const abrir = !!texto;
   cont.innerHTML = orden.map(sub => {
-    const filas = grupos[sub].map(i => `<div class="lista-item">
-      <div class="nombre">${i.nombre}</div>
-      <div class="precio-edit-wrap">
-        <input type="number" step="0.01" min="0" class="precio-input" data-insumo-id="${i.id}" data-precio-original="${Number(i.precio_costo_kg)}" value="${Number(i.precio_costo_kg)}">
-        <span class="precio-estado" data-insumo-id="${i.id}"></span>
-      </div>
-    </div>`).join('');
+    const filas = grupos[sub].map(i => {
+      const subTxt = i.es_preparacion ? 'Preparación casera: el precio se calcula con su receta'
+        : [i.marca, i.unidad_medida === 'unidad' ? 'precio por unidad' : 'precio por kg'].filter(Boolean).join(' · ');
+      const precio = i.es_preparacion
+        ? `<div class="nombre">${formatoPesos(i.precio_costo_kg)}</div>`
+        : `<input type="number" step="0.01" min="0" class="precio-input" data-insumo-id="${i.id}" data-precio-original="${Number(i.precio_costo_kg)}" value="${Number(i.precio_costo_kg)}">
+           <span class="precio-estado" data-insumo-id="${i.id}"></span>`;
+      return `<div class="lista-item">
+        <div><div class="nombre">${i.nombre}</div><div class="sub">${subTxt}</div></div>
+        <div class="precio-edit-wrap">${precio}</div>
+      </div>`;
+    }).join('');
     return `<details class="grupo-stock"${abrir ? ' open' : ''}>
-      <summary><span>${ETIQUETA_SUBCATEGORIA[sub] || sub} <span class="grupo-cant">(${grupos[sub].length})</span></span></summary>
+      <summary><span>${ETIQUETA_INSUMOS[sub] || sub} <span class="grupo-cant">(${grupos[sub].length})</span></span></summary>
       <div class="grupo-stock-body">${filas}</div>
     </details>`;
   }).join('');
@@ -1500,8 +1600,12 @@ document.getElementById('btn-volver-recetas').onclick = () => mostrarPantalla('h
 // Lista fija de categorías de carta (el orden es el de la pantalla).
 const CATEGORIAS_RECETA = [
   'Sandwiches', 'Picadas y platitos', 'Conservas', 'Conito de picada',
-  'Kutsi', 'Sandwiches de Focaccia entera', 'Fuera de carta'
+  'Kutsi', 'Sandwiches de Focaccia entera', 'Fuera de carta', 'Preparaciones'
 ];
+const CATEGORIA_PREPARACIONES = 'Preparaciones';
+function esModoPreparacion() {
+  return document.getElementById('receta-categoria').value === CATEGORIA_PREPARACIONES;
+}
 // Valores viejos (de la primera importación) -> categoría nueva.
 const CATEGORIA_RECETA_LEGACY = {
   'sandwiches': 'Sandwiches', 'kutsi': 'Kutsi',
@@ -1530,22 +1634,32 @@ async function cargarListaRecetas() {
   const { data, error } = await sb.from('recetas').select('*').order('nombre_producto');
   if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
   if (!data || !data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay recetas cargadas.</div>'; return; }
+  const idsPrep = data.filter(r => r.tipo === 'preparacion' && r.insumo_id).map(r => r.insumo_id);
+  const preciosPrep = {};
+  if (idsPrep.length) {
+    const { data: insPrep } = await sb.from('insumos').select('id,precio_costo_kg').in('id', idsPrep);
+    (insPrep || []).forEach(x => { preciosPrep[x.id] = x.precio_costo_kg; });
+  }
   const grupos = {};
   data.forEach(r => {
-    const cat = normalizarCategoriaReceta(r.categoria_carta) || 'Sin categoría';
+    const cat = r.tipo === 'preparacion' ? CATEGORIA_PREPARACIONES : (normalizarCategoriaReceta(r.categoria_carta) || 'Sin categoría');
     (grupos[cat] = grupos[cat] || []).push(r);
   });
   const ordenFinal = CATEGORIAS_RECETA.filter(c => grupos[c])
     .concat(Object.keys(grupos).filter(c => !CATEGORIAS_RECETA.includes(c)));
   cont.innerHTML = ordenFinal.map(cat => {
     const filas = grupos[cat].map(r => {
-      const m = margenRealReceta(r);
+      const esPrep = r.tipo === 'preparacion';
+      const m = esPrep ? null : margenRealReceta(r);
       const pill = m === null ? '' : `<span class="pill-margen ${m < MARGEN_OBJETIVO_COMIDA ? 'bajo' : 'ok'}">${(m * 100).toFixed(1)}%</span>`;
+      const sub = esPrep
+        ? `costo por kg ${formatoPesos(preciosPrep[r.insumo_id])}`
+        : `costo ${formatoPesos(r.costo_total_calculado)} · carta ${formatoPesos(r.precio_venta_sugerido)}`;
       return `
       <div class="lista-item">
         <div>
           <div class="nombre">${r.nombre_producto}</div>
-          <div class="sub">costo ${formatoPesos(r.costo_total_calculado)} · carta ${formatoPesos(r.precio_venta_sugerido)}</div>
+          <div class="sub">${sub}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex:none">
           ${pill}
@@ -1590,7 +1704,7 @@ async function abrirFormReceta(id) {
       alert('No se pudo abrir la receta: ' + (errReceta ? errReceta.message : 'no encontrada'));
       return;
     }
-    const { data: insumosReceta, error: errInsumos } = await sb.from('receta_insumos').select('insumo_id,cantidad,tipo_medida,insumos(nombre)').eq('receta_id', id);
+    const { data: insumosReceta, error: errInsumos } = await sb.from('receta_insumos').select('insumo_id,cantidad,tipo_medida,insumos(nombre,marca,es_preparacion)').eq('receta_id', id);
     if (errInsumos) {
       alert('La receta se abrió, pero no se pudieron cargar sus ingredientes: ' + errInsumos.message);
     }
@@ -1598,7 +1712,9 @@ async function abrirFormReceta(id) {
     llenarSelectCategoriaReceta(receta.categoria_carta);
     document.getElementById('receta-preparacion').value = receta.preparacion || '';
     document.getElementById('receta-margen').value = receta.margen_objetivo;
-    recetaInsumoRows = (insumosReceta || []).map(ri => ({ insumo_id: ri.insumo_id, nombre: ri.insumos?.nombre || '', cantidad: ri.cantidad, tipo_medida: ri.tipo_medida || 'gramos' }));
+    document.getElementById('receta-merma').value = receta.merma_pct || 0;
+    recetaActualInsumoId = receta.insumo_id || null;
+    recetaInsumoRows = (insumosReceta || []).map(ri => ({ insumo_id: ri.insumo_id, nombre: ri.insumos ? etiquetaInsumo(ri.insumos) : '', cantidad: ri.cantidad, tipo_medida: ri.tipo_medida || 'gramos' }));
     document.getElementById('receta-precio-carta').value = receta.precio_venta_sugerido ? Math.round(receta.precio_venta_sugerido) : '';
     precioCartaEditadoManualmente = true; // ya tiene un precio de carta guardado, no lo pisamos con la sugerencia
   } else {
@@ -1606,11 +1722,43 @@ async function abrirFormReceta(id) {
     llenarSelectCategoriaReceta('');
     document.getElementById('receta-preparacion').value = '';
     document.getElementById('receta-margen').value = 65;
+    document.getElementById('receta-merma').value = 0;
+    recetaActualInsumoId = null;
     document.getElementById('receta-precio-carta').value = '';
     precioCartaEditadoManualmente = false;
   }
+  aplicarModoPreparacion();
   renderRecetaInsumos();
   document.getElementById('receta-form').classList.remove('oculto');
+}
+
+let recetaActualInsumoId = null; // insumo que representa a la receta cuando es una preparación
+
+// Una preparación (ej. dip mediterráneo) no tiene precio de carta ni margen:
+// se muestra su costo por kg y se usa como insumo en otras recetas.
+function aplicarModoPreparacion() {
+  const prep = esModoPreparacion();
+  document.getElementById('receta-margen-wrap').classList.toggle('oculto', prep);
+  document.getElementById('receta-merma-wrap').classList.toggle('oculto', !prep);
+  document.getElementById('receta-costeo-card').classList.toggle('oculto', prep);
+  document.getElementById('receta-prep-card').classList.toggle('oculto', !prep);
+}
+document.getElementById('receta-categoria').addEventListener('change', () => {
+  aplicarModoPreparacion();
+  actualizarPreviewCosto();
+});
+document.getElementById('receta-merma').addEventListener('input', () => actualizarPreviewCosto());
+
+// Costo por kg de una preparación = costo total x 1000 / (gramos totales x (1 - merma)).
+function calcularCostoPrep(filas, mermaPct) {
+  let costo = 0, gramos = 0;
+  filas.forEach(row => {
+    const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
+    costo += costoDeFila(row, insumo);
+    if (row.tipo_medida !== 'unidad') gramos += Number(row.cantidad || 0);
+  });
+  const rinde = gramos * (1 - (mermaPct || 0) / 100);
+  return { costo, gramos, rinde, costoKg: rinde > 0 ? costo * 1000 / rinde : 0 };
 }
 
 function costoDeFila(row, insumo) {
@@ -1668,9 +1816,9 @@ function renderRecetaInsumos() {
       const texto = normalizarTexto(inputNombre.value.trim());
       row.insumo_id = null;
       if (!texto) { sugCont.classList.add('oculto'); return; }
-      const coincidencias = LISTA_INSUMOS.filter(i => normalizarTexto(i.nombre).indexOf(texto) >= 0).slice(0, 6);
+      const coincidencias = LISTA_INSUMOS.filter(i => coincideInsumo(i, texto)).slice(0, 8);
       if (!coincidencias.length) { sugCont.classList.add('oculto'); return; }
-      sugCont.innerHTML = coincidencias.map(i => `<button type="button" class="secundario" data-id="${i.id}" style="padding:8px;font-size:13px;margin-bottom:4px">${i.nombre}</button>`).join('');
+      sugCont.innerHTML = coincidencias.map(i => `<button type="button" class="secundario" data-id="${i.id}" style="padding:8px;font-size:13px;margin-bottom:4px">${etiquetaInsumo(i)}</button>`).join('');
       sugCont.classList.remove('oculto');
       sugCont.querySelectorAll('button').forEach(b => {
         b.onclick = () => {
@@ -1703,6 +1851,15 @@ function renderRecetaInsumos() {
 }
 
 function actualizarPreviewCosto() {
+  if (esModoPreparacion()) {
+    const p = calcularCostoPrep(recetaInsumoRows, Number(document.getElementById('receta-merma').value || 0));
+    document.getElementById('receta-prep-box').innerHTML = `
+      <div class="desglose-fila"><span>Costo de todos los ingredientes</span><span>${formatoPesos(p.costo)}</span></div>
+      <div class="desglose-fila"><span>Gramos que se preparan</span><span>${p.gramos.toLocaleString('es-AR', { maximumFractionDigits: 2 })} g</span></div>
+      <div class="desglose-fila"><span>Gramos que rinde (con merma)</span><span>${p.rinde.toLocaleString('es-AR', { maximumFractionDigits: 2 })} g</span></div>
+      <div class="desglose-fila total"><span>Costo por kg</span><span>${formatoPesos(p.costoKg)}</span></div>`;
+    return;
+  }
   const costoVariable = recetaInsumoRows.reduce((acc, row) => {
     const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
     return acc + costoDeFila(row, insumo);
@@ -1759,33 +1916,42 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
   const nombre = document.getElementById('receta-nombre').value.trim();
   const categoria = document.getElementById('receta-categoria').value.trim();
   const preparacion = document.getElementById('receta-preparacion').value.trim();
-  const margen = Number(document.getElementById('receta-margen').value || 0);
+  const esPrep = categoria === CATEGORIA_PREPARACIONES;
+  const margen = esPrep ? 0 : Number(document.getElementById('receta-margen').value || 0);
+  const mermaPct = esPrep ? Number(document.getElementById('receta-merma').value || 0) : 0;
   const filasValidas = recetaInsumoRows.filter(r => r.insumo_id && r.cantidad > 0);
   if (!nombre || !categoria) { alert('Completá nombre y categoría.'); return; }
   if (!filasValidas.length) { alert('Agregá al menos un insumo con cantidad.'); return; }
+  if (esPrep && (mermaPct < 0 || mermaPct >= 100)) { alert('La merma tiene que estar entre 0 y 99%.'); return; }
 
   const costoTotal = filasValidas.reduce((acc, row) => {
     const insumo = LISTA_INSUMOS.find(i => i.id === row.insumo_id);
     return acc + costoDeFila(row, insumo);
   }, 0);
   // precio_venta_sugerido = el precio de carta real (lo redondeás vos
-  // mirando la competencia), no un cálculo automático.
-  const precioSugerido = Number(document.getElementById('receta-precio-carta').value || 0);
-  if (!precioSugerido) { alert('Completá el precio en la carta.'); return; }
+  // mirando la competencia), no un cálculo automático. Las preparaciones no tienen.
+  const precioSugerido = esPrep ? null : Number(document.getElementById('receta-precio-carta').value || 0);
+  if (!esPrep && !precioSugerido) { alert('Completá el precio en la carta.'); return; }
+
+  let prep = null;
+  if (esPrep) {
+    prep = calcularCostoPrep(filasValidas, mermaPct);
+    if (prep.rinde <= 0) { alert('Una preparación necesita al menos un ingrediente medido en gramos.'); return; }
+  }
+
+  const campos = {
+    nombre_producto: nombre, categoria_carta: categoria, preparacion,
+    tipo: esPrep ? 'preparacion' : 'plato', merma_pct: mermaPct,
+    margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
+  };
 
   let recetaId = id;
   if (recetaId) {
-    const { error: errUpd } = await sb.from('recetas').update({
-      nombre_producto: nombre, categoria_carta: categoria, preparacion,
-      margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
-    }).eq('id', recetaId);
+    const { error: errUpd } = await sb.from('recetas').update(campos).eq('id', recetaId);
     if (errUpd) { alert('Error al guardar: ' + errUpd.message); return; }
     await sb.from('receta_insumos').delete().eq('receta_id', recetaId);
   } else {
-    const { data, error } = await sb.from('recetas').insert({
-      nombre_producto: nombre, categoria_carta: categoria, preparacion,
-      margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
-    }).select('id').single();
+    const { data, error } = await sb.from('recetas').insert(campos).select('id').single();
     if (error) { alert('Error al guardar: ' + error.message); return; }
     recetaId = data.id;
   }
@@ -1793,6 +1959,28 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
   const filas = filasValidas.map(r => ({ receta_id: recetaId, insumo_id: r.insumo_id, cantidad: r.cantidad, tipo_medida: r.tipo_medida || 'gramos' }));
   const { error: errIns } = await sb.from('receta_insumos').insert(filas);
   if (errIns) { alert('Error al guardar insumos: ' + errIns.message); return; }
+
+  // Preparación: su insumo (el que se usa en otras recetas) toma el costo por kg.
+  // Al cambiar el precio, la base recalcula las recetas que la usan.
+  if (esPrep) {
+    if (recetaActualInsumoId) {
+      const { error: errPrep } = await sb.from('insumos').update({
+        nombre, precio_costo_kg: prep.costoKg, fecha_ultima_actualizacion: new Date().toISOString()
+      }).eq('id', recetaActualInsumoId);
+      if (errPrep) { alert('La receta se guardó, pero no se pudo actualizar su costo por kg: ' + errPrep.message); }
+    } else {
+      const { data: nuevoIns, error: errNuevo } = await sb.from('insumos').insert({
+        nombre, marca: 'Preparacion casera', grupo: 'cocina', subcategoria: 'cocina',
+        precio_costo_kg: prep.costoKg, unidad_medida: 'kg', es_preparacion: true, origen_alta: 'manual'
+      }).select('id').single();
+      if (errNuevo) { alert('La receta se guardó, pero no se pudo crear el insumo de la preparación: ' + errNuevo.message); }
+      else {
+        await sb.from('recetas').update({ insumo_id: nuevoIns.id }).eq('id', recetaId);
+        recetaActualInsumoId = nuevoIns.id;
+      }
+    }
+    await cargarInsumos();
+  }
 
   document.getElementById('receta-form').classList.add('oculto');
   cargarListaRecetas();
