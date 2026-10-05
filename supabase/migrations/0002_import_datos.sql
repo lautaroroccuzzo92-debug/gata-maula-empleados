@@ -1,6 +1,7 @@
 -- Gata Maula: importacion de datos reales desde PPTO e Ingresos_Egresos
 -- Generado automaticamente. Revisar antes de correr en produccion.
 begin;
+select set_config('app.sin_historial', 'on', true);
 
 -- Proveedores
 insert into public.proveedores (nombre, categoria_default) values ('GREEN CITY', null) on conflict (lower(nombre)) do nothing;

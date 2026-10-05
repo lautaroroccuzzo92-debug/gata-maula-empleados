@@ -153,6 +153,21 @@
   .stock-edit-wrap{display:flex; align-items:center; gap:8px; flex:none;}
   .stock-cantidad-input{width:80px !important; padding:8px !important; text-align:right;}
   .stock-guardado{font-size:12px; color:var(--verde); font-weight:700; white-space:nowrap; min-width:0;}
+  .cap-btn{position:relative;}
+  .badge-alertas{position:absolute; top:6px; right:6px; background:var(--rojo); color:#fff; border-radius:12px; min-width:22px; height:22px; padding:0 6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;}
+  .alerta-item{background:rgba(168,50,50,0.08); border:1px solid var(--rojo); border-radius:12px; padding:12px; margin-bottom:8px;}
+  .alerta-item .nombre{font-weight:700;}
+  .alerta-item .sub{font-size:12.5px; color:var(--gris); margin-top:2px;}
+  .alerta-item .rojo{color:var(--rojo); font-weight:700;}
+  .alerta-item button{margin-top:8px; width:auto; padding:8px 14px;}
+  .pill-margen{font-size:12px; font-weight:700; padding:3px 8px; border-radius:10px; white-space:nowrap;}
+  .pill-margen.ok{background:rgba(58,125,68,0.15); color:var(--verde);}
+  .pill-margen.bajo{background:rgba(168,50,50,0.15); color:var(--rojo);}
+  .precio-edit-wrap{display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex:none;}
+  .precio-input{width:110px !important; padding:8px !important; text-align:right;}
+  .precio-estado{font-size:12px; font-weight:700; min-height:14px;}
+  .precio-estado.ok{color:var(--verde);}
+  .precio-estado.alerta{color:var(--rojo);}
 </style>
 </head>
 <body>
@@ -203,6 +218,8 @@
         <button class="cap-btn oculto" id="btn-nav-caja"><span class="emoji">💰</span>Caja diaria</button>
         <button class="cap-btn oculto" id="btn-nav-ingresos"><span class="emoji">🧾</span>Ingresos/Egresos</button>
         <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
+        <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Precios de insumos</button>
+        <button class="cap-btn oculto" id="btn-nav-alertas"><span class="emoji">🔔</span>Alertas<span class="badge-alertas oculto" id="badge-alertas">0</span></button>
       </div>
     </div>
 
@@ -466,6 +483,26 @@
     <button class="secundario" id="btn-volver-stock">Volver</button>
   </div>
 
+  <!-- PANTALLA: ALERTAS -->
+  <div id="pantalla-alertas" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Alertas</h2>
+    <h2 class="section-title">Aumentos de más de 7%</h2>
+    <div class="aviso">Hablá con el proveedor y después tocá "Ya lo hablé" para sacar la alerta.</div>
+    <div id="alertas-aumentos"></div>
+    <h2 class="section-title">Platos con margen bajo (menos de 65%)</h2>
+    <div id="alertas-margen"></div>
+    <button class="secundario" id="btn-volver-alertas">Volver</button>
+  </div>
+
+  <!-- PANTALLA: PRECIOS DE INSUMOS -->
+  <div id="pantalla-precios" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Precios de insumos</h2>
+    <div class="aviso">Cambiá el precio cuando te pasen una lista nueva. Las recetas se recalculan solas; el precio de carta no se toca. Si el aumento supera el 7% queda una alerta.</div>
+    <input type="text" id="precios-buscador" placeholder="Buscar insumo...">
+    <div id="precios-lista"></div>
+    <button class="secundario" id="btn-volver-precios">Volver</button>
+  </div>
+
   <!-- PANTALLA: CONFIGURACIÓN -->
   <div id="pantalla-config" class="oculto">
     <h2 class="section-title" style="margin-top:0">Ajustes</h2>
@@ -588,7 +625,7 @@ function categoriasDisponibles() {
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
@@ -641,6 +678,8 @@ function aplicarGatingPorRol() {
   document.getElementById('btn-nav-recetas').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-caja').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-ingresos').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-precios').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-alertas').classList.toggle('oculto', !soloAdminEncargado);
 }
 
 function irAHome() {
@@ -651,6 +690,7 @@ function irAHome() {
   aplicarGatingPorRol();
   mostrarPantalla('home');
   cargarListas();
+  actualizarBadgeAlertas();
 }
 
 // ---------- Config ----------
@@ -1281,6 +1321,174 @@ function formatoPesos(n) {
   return `$${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Margen real = (carta sin IVA − costo variable) / carta sin IVA, igual a la columna S del Excel.
+function margenRealReceta(r) {
+  const neto = Number(r.precio_venta_sugerido || 0) / (1 + IVA_PCT_RECETA);
+  if (!neto) return null;
+  return (neto - Number(r.costo_total_calculado || 0)) / neto;
+}
+
+// ---------- Alertas (aumentos de precio > 7% y márgenes bajos) ----------
+const UMBRAL_AUMENTO_PCT = 7;
+
+async function actualizarBadgeAlertas() {
+  const badge = document.getElementById('badge-alertas');
+  if (!USUARIO_ACTUAL || !['admin', 'encargado'].includes(USUARIO_ACTUAL.rol)) return;
+  try {
+    const { count: aumentos, error: e1 } = await sb.from('historial_precios')
+      .select('id', { count: 'exact', head: true }).eq('alerta', true).eq('alerta_resuelta', false);
+    if (e1) throw e1;
+    const recetas = await traerTodo(() => sb.from('recetas').select('id,costo_total_calculado,precio_venta_sugerido').order('id'));
+    const bajos = recetas.filter(r => { const m = margenRealReceta(r); return m !== null && m < MARGEN_OBJETIVO_COMIDA; }).length;
+    const total = (aumentos || 0) + bajos;
+    badge.textContent = total;
+    badge.classList.toggle('oculto', total === 0);
+  } catch (e) {
+    badge.classList.add('oculto');
+  }
+}
+
+document.getElementById('btn-nav-alertas').onclick = async () => {
+  mostrarPantalla('alertas');
+  await cargarAlertas();
+};
+document.getElementById('btn-volver-alertas').onclick = () => { irAHome(); };
+
+async function cargarAlertas() {
+  const contA = document.getElementById('alertas-aumentos');
+  const contM = document.getElementById('alertas-margen');
+  contA.innerHTML = 'Cargando...';
+  contM.innerHTML = 'Cargando...';
+  try {
+    const { data: aumentos, error } = await sb.from('historial_precios')
+      .select('id,insumo_id,precio_anterior,precio_nuevo,variacion_pct,origen,fecha,insumos(nombre,proveedores(nombre))')
+      .eq('alerta', true).eq('alerta_resuelta', false).order('fecha', { ascending: false });
+    if (error) throw error;
+    // Cuántas recetas usa cada insumo con aumento
+    const ids = [...new Set((aumentos || []).map(a => a.insumo_id))];
+    const usos = {};
+    if (ids.length) {
+      const { data: ri } = await sb.from('receta_insumos').select('insumo_id,receta_id').in('insumo_id', ids);
+      (ri || []).forEach(x => { (usos[x.insumo_id] = usos[x.insumo_id] || new Set()).add(x.receta_id); });
+    }
+    if (!aumentos || !aumentos.length) {
+      contA.innerHTML = '<div class="aviso">No hay aumentos pendientes. 👍</div>';
+    } else {
+      contA.innerHTML = aumentos.map(a => {
+        const prov = a.insumos?.proveedores?.nombre;
+        const nRec = usos[a.insumo_id] ? usos[a.insumo_id].size : 0;
+        return `<div class="alerta-item">
+          <div class="nombre">${a.insumos?.nombre || '(insumo)'}${prov ? ' · ' + prov : ''}</div>
+          <div class="sub"><span class="rojo">+${Number(a.variacion_pct).toFixed(1)}%</span> · ${formatoPesos(a.precio_anterior)} → ${formatoPesos(a.precio_nuevo)}</div>
+          <div class="sub">${a.origen === 'factura' ? 'Por factura' : 'Cargado a mano (lista de precios)'} · ${new Date(a.fecha).toLocaleDateString('es-AR')} · afecta ${nRec} receta${nRec === 1 ? '' : 's'}</div>
+          <button type="button" class="secundario btn-resolver-alerta" data-id="${a.id}">Ya lo hablé con el proveedor</button>
+        </div>`;
+      }).join('');
+      contA.querySelectorAll('.btn-resolver-alerta').forEach(btn => {
+        btn.onclick = async () => {
+          btn.disabled = true;
+          const { error: errUp } = await sb.from('historial_precios')
+            .update({ alerta_resuelta: true, resuelta_por: USUARIO_ACTUAL.id, resuelta_en: new Date().toISOString() })
+            .eq('id', btn.dataset.id);
+          if (errUp) { alert('No se pudo marcar: ' + errUp.message); btn.disabled = false; return; }
+          await cargarAlertas();
+        };
+      });
+    }
+
+    const recetas = await traerTodo(() => sb.from('recetas').select('id,nombre_producto,categoria_carta,costo_total_calculado,precio_venta_sugerido').order('id'));
+    const bajos = recetas.map(r => ({ r, m: margenRealReceta(r) }))
+      .filter(x => x.m !== null && x.m < MARGEN_OBJETIVO_COMIDA)
+      .sort((a, b) => a.m - b.m);
+    if (!bajos.length) {
+      contM.innerHTML = '<div class="aviso">Todos los platos están por encima del 65%. 👍</div>';
+    } else {
+      contM.innerHTML = bajos.map(x => {
+        // Carta mínima (con IVA) para llegar al 65% con el costo actual.
+        const cartaMin = Number(x.r.costo_total_calculado) / (1 - MARGEN_OBJETIVO_COMIDA) * (1 + IVA_PCT_RECETA);
+        return `<div class="alerta-item">
+          <div class="nombre">${x.r.nombre_producto}</div>
+          <div class="sub"><span class="rojo">Margen ${(x.m * 100).toFixed(1)}%</span> · costo ${formatoPesos(x.r.costo_total_calculado)} · carta ${formatoPesos(x.r.precio_venta_sugerido)}</div>
+          <div class="sub">Para llegar al 65% la carta tendría que ser de ${formatoPesos(cartaMin)} o más.</div>
+        </div>`;
+      }).join('');
+    }
+  } catch (e) {
+    contA.innerHTML = `<div class="estado-box estado-error">${e.message}</div>`;
+    contM.innerHTML = '';
+  }
+}
+
+// ---------- Precios de insumos (carga manual por lista de precios) ----------
+const ORDEN_SUBCATEGORIAS_PRECIOS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'panes', 'cocina'];
+
+document.getElementById('btn-nav-precios').onclick = async () => {
+  document.getElementById('precios-buscador').value = '';
+  document.getElementById('precios-lista').innerHTML = 'Cargando...';
+  mostrarPantalla('precios');
+  await cargarInsumos();
+  renderPrecios('');
+};
+document.getElementById('btn-volver-precios').onclick = () => { irAHome(); };
+document.getElementById('precios-buscador').addEventListener('input', (e) => renderPrecios(e.target.value));
+
+function renderPrecios(filtro) {
+  const cont = document.getElementById('precios-lista');
+  const texto = normalizarTexto((filtro || '').trim());
+  const filtrado = LISTA_INSUMOS.filter(i => !texto || normalizarTexto(i.nombre).indexOf(texto) >= 0);
+  if (!filtrado.length) { cont.innerHTML = '<div class="aviso">No hay insumos que coincidan.</div>'; return; }
+  const grupos = {};
+  filtrado.forEach(i => { (grupos[i.subcategoria] = grupos[i.subcategoria] || []).push(i); });
+  const orden = ORDEN_SUBCATEGORIAS_PRECIOS.filter(s => grupos[s]).concat(Object.keys(grupos).filter(s => !ORDEN_SUBCATEGORIAS_PRECIOS.includes(s)));
+  const abrir = !!texto;
+  cont.innerHTML = orden.map(sub => {
+    const filas = grupos[sub].map(i => `<div class="lista-item">
+      <div class="nombre">${i.nombre}</div>
+      <div class="precio-edit-wrap">
+        <input type="number" step="0.01" min="0" class="precio-input" data-insumo-id="${i.id}" data-precio-original="${Number(i.precio_costo_kg)}" value="${Number(i.precio_costo_kg)}">
+        <span class="precio-estado" data-insumo-id="${i.id}"></span>
+      </div>
+    </div>`).join('');
+    return `<details class="grupo-stock"${abrir ? ' open' : ''}>
+      <summary><span>${ETIQUETA_SUBCATEGORIA[sub] || sub} <span class="grupo-cant">(${grupos[sub].length})</span></span></summary>
+      <div class="grupo-stock-body">${filas}</div>
+    </details>`;
+  }).join('');
+
+  cont.querySelectorAll('.precio-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      const id = input.dataset.insumoId;
+      const anterior = Number(input.dataset.precioOriginal);
+      const nuevo = Number(input.value);
+      const estado = cont.querySelector(`.precio-estado[data-insumo-id="${id}"]`);
+      if (isNaN(nuevo) || nuevo < 0 || input.value === '') {
+        estado.className = 'precio-estado alerta'; estado.textContent = 'Valor inválido'; input.value = anterior; return;
+      }
+      if (nuevo === anterior) { estado.textContent = ''; return; }
+      input.disabled = true;
+      estado.className = 'precio-estado'; estado.textContent = 'Guardando...';
+      const { error } = await sb.from('insumos')
+        .update({ precio_costo_kg: nuevo, fecha_ultima_actualizacion: new Date().toISOString() })
+        .eq('id', id);
+      input.disabled = false;
+      if (error) {
+        estado.className = 'precio-estado alerta'; estado.textContent = 'Error: ' + error.message; input.value = anterior; return;
+      }
+      input.dataset.precioOriginal = nuevo;
+      const ins = LISTA_INSUMOS.find(x => x.id === id);
+      if (ins) ins.precio_costo_kg = nuevo;
+      const pct = anterior > 0 ? (nuevo - anterior) / anterior * 100 : null;
+      if (pct !== null && pct > UMBRAL_AUMENTO_PCT) {
+        estado.className = 'precio-estado alerta';
+        estado.textContent = `⚠️ +${pct.toFixed(1)}%: avisar al proveedor`;
+      } else {
+        estado.className = 'precio-estado ok';
+        estado.textContent = pct === null ? '✓ Guardado' : `✓ ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+      }
+    });
+  });
+}
+
 document.getElementById('btn-nav-recetas').onclick = async () => {
   await cargarInsumos();
   await cargarListaRecetas();
@@ -1330,16 +1538,24 @@ async function cargarListaRecetas() {
   const ordenFinal = CATEGORIAS_RECETA.filter(c => grupos[c])
     .concat(Object.keys(grupos).filter(c => !CATEGORIAS_RECETA.includes(c)));
   cont.innerHTML = ordenFinal.map(cat => {
-    const filas = grupos[cat].map(r => `
+    const filas = grupos[cat].map(r => {
+      const m = margenRealReceta(r);
+      const pill = m === null ? '' : `<span class="pill-margen ${m < MARGEN_OBJETIVO_COMIDA ? 'bajo' : 'ok'}">${(m * 100).toFixed(1)}%</span>`;
+      return `
       <div class="lista-item">
         <div>
           <div class="nombre">${r.nombre_producto}</div>
-          <div class="sub">costo $${Number(r.costo_total_calculado||0).toLocaleString('es-AR',{minimumFractionDigits:2})} · carta $${Number(r.precio_venta_sugerido||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</div>
+          <div class="sub">costo ${formatoPesos(r.costo_total_calculado)} · carta ${formatoPesos(r.precio_venta_sugerido)}</div>
         </div>
-        <button type="button" class="secundario btn-editar-receta" data-id="${r.id}" style="width:auto;padding:8px 14px;margin:0">Editar</button>
-      </div>`).join('');
+        <div style="display:flex;align-items:center;gap:8px;flex:none">
+          ${pill}
+          <button type="button" class="secundario btn-editar-receta" data-id="${r.id}" style="width:auto;padding:8px 14px;margin:0">Editar</button>
+        </div>
+      </div>`;
+    }).join('');
+    const hayBajo = grupos[cat].some(r => { const m = margenRealReceta(r); return m !== null && m < MARGEN_OBJETIVO_COMIDA; });
     return `<details class="grupo-stock">
-      <summary>${cat} <span class="grupo-cant">(${grupos[cat].length})</span></summary>
+      <summary><span>${cat} <span class="grupo-cant">(${grupos[cat].length})</span>${hayBajo ? ' <span class="bajo-minimo">⚠️ margen bajo</span>' : ''}</span></summary>
       <div class="grupo-stock-body">${filas}</div>
     </details>`;
   }).join('');
