@@ -525,6 +525,9 @@
           <select id="ins-nuevo-unidad"><option value="kg">Kg o litro</option><option value="unidad">Unidad</option></select>
         </div>
       </div>
+      <label>Si viene en paquete: gramos del paquete (opcional)</label>
+      <input type="number" step="1" min="0" id="ins-nuevo-paquete" placeholder="Ej: 100 para un paquete de 100 g">
+      <div class="aviso">Si lo completás, el precio de arriba es el del paquete entero.</div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="ins-nuevo-stock" style="width:auto;margin:0"> Agregarlo al control de stock</label>
       <div id="ins-nuevo-resultado"></div>
       <button class="big" id="btn-guardar-insumo-nuevo">Guardar insumo</button>
@@ -646,7 +649,7 @@ async function traerTodo(construirQuery) {
 
 async function cargarInsumos() {
   try {
-    LISTA_INSUMOS = await traerTodo(() => sb.from('insumos').select('id,nombre,marca,precio_costo_kg,subcategoria,unidad_medida,es_preparacion').order('nombre').order('id'));
+    LISTA_INSUMOS = await traerTodo(() => sb.from('insumos').select('id,nombre,marca,precio_costo_kg,subcategoria,unidad_medida,gramos_paquete,es_preparacion').order('nombre').order('id'));
   } catch (e) {
     LISTA_INSUMOS = [];
   }
@@ -1491,7 +1494,7 @@ document.getElementById('ins-nuevo-categoria').addEventListener('change', (e) =>
   if (def) document.getElementById('ins-nuevo-unidad').value = def[1];
 });
 document.getElementById('btn-nuevo-insumo').onclick = () => {
-  ['ins-nuevo-marca', 'ins-nuevo-nombre', 'ins-nuevo-precio'].forEach(id => { document.getElementById(id).value = ''; });
+  ['ins-nuevo-marca', 'ins-nuevo-nombre', 'ins-nuevo-precio', 'ins-nuevo-paquete'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('ins-nuevo-categoria').value = 'fiambres';
   document.getElementById('ins-nuevo-unidad').value = 'kg';
   document.getElementById('ins-nuevo-stock').checked = false;
@@ -1513,7 +1516,8 @@ document.getElementById('btn-guardar-insumo-nuevo').onclick = async () => {
     p_subcategoria: document.getElementById('ins-nuevo-categoria').value,
     p_precio: Number(precioTxt),
     p_unidad: document.getElementById('ins-nuevo-unidad').value,
-    p_con_stock: document.getElementById('ins-nuevo-stock').checked
+    p_con_stock: document.getElementById('ins-nuevo-stock').checked,
+    p_gramos_paquete: Number(document.getElementById('ins-nuevo-paquete').value) > 0 ? Number(document.getElementById('ins-nuevo-paquete').value) : null
   });
   if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
   document.getElementById('insumo-nuevo-form').classList.add('oculto');
@@ -1523,6 +1527,13 @@ document.getElementById('btn-guardar-insumo-nuevo').onclick = async () => {
 };
 document.getElementById('btn-volver-precios').onclick = () => { irAHome(); };
 document.getElementById('precios-buscador').addEventListener('input', (e) => renderPrecios(e.target.value));
+
+// Si el insumo viene en paquete (ej. rucula 100 g) se muestra y se edita el precio del paquete.
+function precioMostrado(i) {
+  const g = Number(i.gramos_paquete) || 0;
+  const v = g ? Number(i.precio_costo_kg) * g / 1000 : Number(i.precio_costo_kg);
+  return Math.round(v * 100) / 100;
+}
 
 function renderPrecios(filtro) {
   const cont = document.getElementById('precios-lista');
@@ -1539,10 +1550,10 @@ function renderPrecios(filtro) {
   cont.innerHTML = orden.map(sub => {
     const filas = grupos[sub].map(i => {
       const subTxt = i.es_preparacion ? 'Preparación casera: el precio se calcula con su receta'
-        : [i.marca, i.unidad_medida === 'unidad' ? 'precio por unidad' : 'precio por kg'].filter(Boolean).join(' · ');
+        : [i.marca, i.gramos_paquete ? `precio por paquete de ${Number(i.gramos_paquete)} g` : (i.unidad_medida === 'unidad' ? 'precio por unidad' : 'precio por kg')].filter(Boolean).join(' · ');
       const precio = i.es_preparacion
         ? `<div class="nombre">${formatoPesos(i.precio_costo_kg)}</div>`
-        : `<input type="number" step="0.01" min="0" class="precio-input" data-insumo-id="${i.id}" data-precio-original="${Number(i.precio_costo_kg)}" value="${Number(i.precio_costo_kg)}">
+        : `<input type="number" step="0.01" min="0" class="precio-input" data-insumo-id="${i.id}" data-gramos="${Number(i.gramos_paquete) || 0}" data-precio-original="${precioMostrado(i)}" value="${precioMostrado(i)}">
            <span class="precio-estado" data-insumo-id="${i.id}"></span>`;
       return `<div class="lista-item">
         <div><div class="nombre">${i.nombre}</div><div class="sub">${subTxt}</div></div>
@@ -1560,6 +1571,8 @@ function renderPrecios(filtro) {
       const id = input.dataset.insumoId;
       const anterior = Number(input.dataset.precioOriginal);
       const nuevo = Number(input.value);
+      const gPaq = Number(input.dataset.gramos) || 0;
+      const nuevoKg = gPaq ? nuevo * 1000 / gPaq : nuevo; // el costo se guarda siempre por kg
       const estado = cont.querySelector(`.precio-estado[data-insumo-id="${id}"]`);
       if (isNaN(nuevo) || nuevo < 0 || input.value === '') {
         estado.className = 'precio-estado alerta'; estado.textContent = 'Valor inválido'; input.value = anterior; return;
@@ -1568,7 +1581,7 @@ function renderPrecios(filtro) {
       input.disabled = true;
       estado.className = 'precio-estado'; estado.textContent = 'Guardando...';
       const { error } = await sb.from('insumos')
-        .update({ precio_costo_kg: nuevo, fecha_ultima_actualizacion: new Date().toISOString() })
+        .update({ precio_costo_kg: nuevoKg, fecha_ultima_actualizacion: new Date().toISOString() })
         .eq('id', id);
       input.disabled = false;
       if (error) {
@@ -1576,7 +1589,7 @@ function renderPrecios(filtro) {
       }
       input.dataset.precioOriginal = nuevo;
       const ins = LISTA_INSUMOS.find(x => x.id === id);
-      if (ins) ins.precio_costo_kg = nuevo;
+      if (ins) ins.precio_costo_kg = nuevoKg;
       const pct = anterior > 0 ? (nuevo - anterior) / anterior * 100 : null;
       if (pct !== null && pct > UMBRAL_AUMENTO_PCT) {
         estado.className = 'precio-estado alerta';
