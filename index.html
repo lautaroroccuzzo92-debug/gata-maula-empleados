@@ -219,6 +219,7 @@
         <button class="cap-btn oculto" id="btn-nav-ingresos"><span class="emoji">🧾</span>Ingresos/Egresos</button>
         <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
         <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Insumos y precios</button>
+        <button class="cap-btn oculto" id="btn-nav-calendario"><span class="emoji">📅</span>Calendario de pagos<span class="badge-alertas oculto" id="badge-calendario">0</span></button>
         <button class="cap-btn oculto" id="btn-nav-alertas"><span class="emoji">🔔</span>Alertas<span class="badge-alertas oculto" id="badge-alertas">0</span></button>
       </div>
     </div>
@@ -441,43 +442,23 @@
         <label style="margin-top:0">Fecha</label>
         <input type="date" id="ie-fecha">
         <label>Proveedor (opcional)</label>
-        <input type="text" id="ie-proveedor">
+        <input type="text" id="ie-proveedor" list="ie-proveedores-lista" autocomplete="off">
+        <datalist id="ie-proveedores-lista"></datalist>
         <label>Concepto</label>
-        <input type="text" id="ie-concepto" placeholder="personal, alquiler, luz, fiambres y quesos...">
-        <label>Monto</label>
+        <input type="text" id="ie-concepto" list="ie-conceptos-lista" autocomplete="off" placeholder="FIAMBRES Y QUESOS, LUZ, PERSONAL...">
+        <datalist id="ie-conceptos-lista"></datalist>
+        <label>Monto ($)</label>
         <input type="number" step="0.01" id="ie-monto">
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;text-transform:none;font-size:14px">
-          <input type="checkbox" id="ie-tiene-iva" style="width:auto">
-          Tiene IVA discriminado
-        </label>
-        <div id="ie-wrap-iva" class="oculto">
-          <label>Alícuota IVA</label>
-          <select id="ie-iva-pct">
-            <option value="21">21%</option>
-            <option value="10.5">10,5%</option>
-            <option value="27">27%</option>
-            <option value="5">5%</option>
-            <option value="2.5">2,5%</option>
-            <option value="0">0% (Exento)</option>
-          </select>
-        </div>
-        <label>¿Está pagado?</label>
-        <select id="ie-estado-pago">
-          <option value="pendiente">Pendiente</option>
-          <option value="pagado">Pagado</option>
+        <label>¿Cómo se registra?</label>
+        <select id="ie-forma">
+          <option value="deuda_proveedores">A pagar (queda como deuda con el proveedor)</option>
+          <option value="egreso_efectivo">Pagado en efectivo</option>
+          <option value="egreso_banco">Pagado por banco / transferencia</option>
+          <option value="otras_deudas">Otra deuda (impuestos, servicios...)</option>
+          <option value="otros_ingresos">Otro ingreso (no habitual)</option>
         </select>
-        <div id="ie-wrap-medio-pago" class="oculto">
-          <label>Medio de pago</label>
-          <select id="ie-medio-pago">
-            <option value="Efectivo">Efectivo</option>
-            <option value="Transferencia">Transferencia</option>
-            <option value="Tarjeta débito">Tarjeta débito</option>
-            <option value="Tarjeta crédito">Tarjeta crédito</option>
-            <option value="Cheque">Cheque</option>
-            <option value="Otro">Otro</option>
-          </select>
-        </div>
-        <label>N° Factura / Remito (opcional)</label>
+        <div id="ie-aviso-venc" class="aviso oculto"></div>
+        <label>N° Factura / Orden (opcional)</label>
         <input type="text" id="ie-factura-numero">
         <label>Observaciones</label>
         <textarea id="ie-observaciones"></textarea>
@@ -493,6 +474,44 @@
     <input type="text" id="stock-buscador" placeholder="Buscar insumo...">
     <div id="stock-lista"></div>
     <button class="secundario" id="btn-volver-stock">Volver</button>
+  </div>
+
+  <!-- PANTALLA: CALENDARIO DE PAGOS -->
+  <div id="pantalla-calendario" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Calendario de pagos a proveedores</h2>
+    <div class="card" id="calendario-resumen"></div>
+    <button class="agregar-producto" id="btn-calendario-nuevo">+ Agregar pago</button>
+    <button class="secundario" id="btn-calendario-ver-pagados">Ver pagados recientes</button>
+    <div id="calendario-form" class="card oculto">
+      <h2 class="section-title" style="margin-top:0" id="cal-form-titulo"></h2>
+      <input type="hidden" id="cal-modo">
+      <div id="cal-wrap-pagar">
+        <label style="margin-top:0">¿Cómo se pagó?</label>
+        <select id="cal-pago-forma">
+          <option value="egreso_banco">Banco / transferencia</option>
+          <option value="egreso_efectivo">Efectivo</option>
+        </select>
+        <label>Fecha de pago</label>
+        <input type="date" id="cal-pago-fecha">
+      </div>
+      <div id="cal-wrap-editar" class="oculto">
+        <label style="margin-top:0">Proveedor</label>
+        <input type="text" id="cal-ed-proveedor">
+        <label>Vencimiento</label>
+        <input type="date" id="cal-ed-venc">
+        <label>Monto ($)</label>
+        <input type="number" step="0.01" id="cal-ed-total">
+        <label>N° de factura (opcional)</label>
+        <input type="text" id="cal-ed-nro">
+        <label>Nota (opcional)</label>
+        <input type="text" id="cal-ed-nota">
+      </div>
+      <div id="cal-resultado"></div>
+      <button class="big" id="btn-cal-confirmar">Confirmar</button>
+      <button class="secundario" id="btn-cal-cancelar">Cancelar</button>
+    </div>
+    <div id="calendario-lista"></div>
+    <button class="secundario" id="btn-volver-calendario">Volver</button>
   </div>
 
   <!-- PANTALLA: ALERTAS -->
@@ -670,7 +689,7 @@ function categoriasDisponibles() {
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
@@ -725,6 +744,7 @@ function aplicarGatingPorRol() {
   document.getElementById('btn-nav-ingresos').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-precios').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-alertas').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-calendario').classList.toggle('oculto', rol !== 'admin');
 }
 
 function irAHome() {
@@ -1376,8 +1396,25 @@ function margenRealReceta(r) {
 // ---------- Alertas (aumentos de precio > 7% y márgenes bajos) ----------
 const UMBRAL_AUMENTO_PCT = 7;
 
+// Pagos del calendario vencidos o que vencen en los próximos 3 días (solo admin).
+async function actualizarBadgeCalendario() {
+  const badge = document.getElementById('badge-calendario');
+  if (!USUARIO_ACTUAL || USUARIO_ACTUAL.rol !== 'admin') return;
+  try {
+    const limite = new Date(); limite.setDate(limite.getDate() + 3);
+    const { count, error } = await sb.from('calendario_pagos')
+      .select('id', { count: 'exact', head: true }).eq('pagado', false).lte('fecha_vencimiento', limite.toISOString().slice(0, 10));
+    if (error) throw error;
+    badge.textContent = count || 0;
+    badge.classList.toggle('oculto', !count);
+  } catch (e) {
+    badge.classList.add('oculto');
+  }
+}
+
 async function actualizarBadgeAlertas() {
   const badge = document.getElementById('badge-alertas');
+  actualizarBadgeCalendario();
   if (!USUARIO_ACTUAL || !['admin', 'encargado'].includes(USUARIO_ACTUAL.rol)) return;
   try {
     const { count: aumentos, error: e1 } = await sb.from('historial_precios')
@@ -2036,71 +2073,112 @@ document.getElementById('btn-guardar-caja').onclick = async () => {
   else resDiv.innerHTML = '<div class="estado-box estado-ok">✅ Cierre guardado.</div>';
 };
 
-// ---------- Ingresos / Egresos ----------
+// ---------- Ingresos / Egresos (igual que la hoja EGRESOS del Excel) ----------
+const CONCEPTOS_EGRESO = [
+  'FIAMBRES Y QUESOS', 'VERMUT', 'COCINA', 'PAN', 'VERDULERIA', 'CARNICERIA', 'VINOS', 'COMIDA DE PERSONAL',
+  'BEBIDA CON ALCOHOL', 'BEBIDA SIN ALCOHOL', 'INSUMOS BARRA', 'CERVEZA',
+  'PERSONAL', 'PERSONAL BARRA', 'PERSONAL COCINA', 'PERSONAL SALON', 'PERSONAL ADMINISTRACION Y GERENTE GENERAL',
+  'PERSONAL LIMPIEZA', 'PERSONAL DELIVERY', 'CARGAS SOCIALES - APORTES Y CONTRIB.', 'SINDICATO', 'AGUINALDOS, VACACIONES',
+  'LIQUIDACION FINAL', 'LIQUIDACIONES', 'ADELANTOS',
+  'ALQUILER', 'EXPENSAS / GASTOS COMUNES', 'LUZ', 'AGUA', 'GAS', 'INTERNET, TELEFONIA, NUBES', 'ABONO SISTEMA',
+  'HONORARIOS PROFESIONALES', 'SEGUROS', 'URGENCIAS', 'AUTONOMOS', 'ANTICIPO GANANCIAS', 'ADT SECURITY SERVICES',
+  'ADICAPIF', 'SADAIC', 'BROMATOLOGA', 'DESINFECCION', 'RECOLECCION BASURA',
+  'MKT - DJ - SONIDO', 'REDES', 'IMPRENTA, LIBRERÍA', 'DESCARTABLES', 'GASTOS DIARIOS NO CLASIFICADOS',
+  'INSUMOS DE LIMPIEZA', 'MANO DE OBRA MANTENIMIENTO', 'INSUMOS DE MANTENIMIENTO', 'CALEFACCIONAMIENTO',
+  'COMISIONISTA', 'VOUCHER CANJE', 'BAZAR', 'UNIFORMES', 'FLETE', 'EVENTO', 'CAPACITACION', 'MERCADERIA PARA EMPLEADOS',
+  'ARANCELES POR VTA CON TARJETAS', 'GASTOS BANCARIOS', 'IMPUESTO AL DEBITO Y CREDITO', 'COMISION MERCADO PAGO',
+  'INGRESOS BRUTOS', 'CONTRIBUCION MUNICIPAL', 'IVA',
+  'COMPRA DE BIENES DE USO', 'PAGO DEUDA', 'PAGO DEUDA PROVEEDORES', 'REMODELACIONES', 'RETIRO SOCIO', 'OTROS EGRESOS',
+  'INGRESOS NO HABITUALES', 'GASTO VELAS'
+];
+const ETIQUETA_FORMA = {
+  deuda_proveedores: 'A pagar', egreso_efectivo: 'Efectivo', egreso_banco: 'Banco', otras_deudas: 'Otra deuda',
+  otros_ingresos: 'Ingreso', acred_banco: 'Acreditación', ahorro: 'Ahorro'
+};
+let PROVEEDORES_PLAZO = []; // { id, nombre, plazo_pago_dias }
+
+document.getElementById('ie-conceptos-lista').innerHTML = CONCEPTOS_EGRESO.map(c => `<option value="${c}">`).join('');
+
 document.getElementById('btn-nav-ingresos').onclick = async () => {
   await cargarListaIngresosEgresos();
   document.getElementById('ingreso-egreso-form').classList.add('oculto');
   mostrarPantalla('ingresos');
 };
-document.getElementById('btn-volver-ingresos').onclick = () => mostrarPantalla('home');
+document.getElementById('btn-volver-ingresos').onclick = () => irAHome();
+
+async function cargarProveedoresPlazo() {
+  try {
+    PROVEEDORES_PLAZO = await traerTodo(() => sb.from('proveedores').select('id,nombre,plazo_pago_dias').order('nombre').order('id'));
+  } catch (e) { PROVEEDORES_PLAZO = []; }
+  document.getElementById('ie-proveedores-lista').innerHTML = PROVEEDORES_PLAZO.map(p => `<option value="${p.nombre.replace(/"/g, '&quot;')}">`).join('');
+}
 
 async function cargarListaIngresosEgresos() {
   const cont = document.getElementById('ingresos-lista');
   cont.innerHTML = 'Cargando...';
-  const { data, error } = await sb.from('ingresos_egresos').select('*').order('fecha', { ascending: false }).limit(30);
+  const { data, error } = await sb.from('ingresos_egresos').select('*,proveedores(nombre)').order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(30);
   if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
   if (!data || !data.length) { cont.innerHTML = '<div class="aviso">No hay movimientos cargados.</div>'; return; }
-  cont.innerHTML = data.map(m => `
+  cont.innerHTML = '<div class="aviso">Últimos 30 movimientos.</div>' + data.map(m => `
     <div class="lista-item">
       <div>
         <div class="nombre">${m.concepto}</div>
-        <div class="sub">${m.fecha} · $${Number(m.monto).toLocaleString('es-AR',{minimumFractionDigits:2})} · <span class="pill ${m.estado_pago==='pagado'?'pill-pagado':'pill-pendiente'}">${m.estado_pago}</span></div>
+        <div class="sub">${m.fecha}${m.proveedores?.nombre ? ' · ' + m.proveedores.nombre : ''} · ${formatoPesos(m.monto)}</div>
       </div>
-      ${m.estado_pago === 'pendiente' ? `<button type="button" class="secundario btn-marcar-pagado" data-id="${m.id}" style="width:auto;padding:8px 14px;margin:0">Marcar pagado</button>` : ''}
+      <span class="pill ${m.forma === 'deuda_proveedores' ? 'pill-pendiente' : 'pill-pagado'}">${ETIQUETA_FORMA[m.forma] || m.estado_pago}</span>
     </div>
   `).join('');
-  cont.querySelectorAll('.btn-marcar-pagado').forEach(btn => {
-    btn.onclick = async () => {
-      btn.disabled = true;
-      const { error: errUpd } = await sb.from('ingresos_egresos')
-        .update({ estado_pago: 'pagado', fecha_pago: new Date().toISOString().slice(0,10) })
-        .eq('id', btn.dataset.id);
-      if (errUpd) { alert('Error: ' + errUpd.message); btn.disabled = false; }
-      else cargarListaIngresosEgresos();
-    };
-  });
 }
 
-document.getElementById('btn-nuevo-ingreso-egreso').onclick = () => {
-  document.getElementById('ie-fecha').value = new Date().toISOString().slice(0,10);
+document.getElementById('btn-nuevo-ingreso-egreso').onclick = async () => {
+  document.getElementById('ie-fecha').value = new Date().toISOString().slice(0, 10);
   document.getElementById('ie-proveedor').value = '';
   document.getElementById('ie-concepto').value = '';
   document.getElementById('ie-monto').value = '';
-  document.getElementById('ie-tiene-iva').checked = false;
-  document.getElementById('ie-wrap-iva').classList.add('oculto');
-  document.getElementById('ie-estado-pago').value = 'pendiente';
-  document.getElementById('ie-wrap-medio-pago').classList.add('oculto');
+  document.getElementById('ie-forma').value = 'deuda_proveedores';
   document.getElementById('ie-factura-numero').value = '';
   document.getElementById('ie-observaciones').value = '';
   document.getElementById('ingreso-egreso-form').classList.remove('oculto');
+  await cargarProveedoresPlazo();
+  actualizarAvisoVencimiento();
 };
 document.getElementById('btn-cancelar-ingreso-egreso').onclick = () => {
   document.getElementById('ingreso-egreso-form').classList.add('oculto');
 };
-document.getElementById('ie-tiene-iva').onchange = (e) => {
-  document.getElementById('ie-wrap-iva').classList.toggle('oculto', !e.target.checked);
-};
-document.getElementById('ie-estado-pago').onchange = (e) => {
-  document.getElementById('ie-wrap-medio-pago').classList.toggle('oculto', e.target.value !== 'pagado');
-};
+
+function plazoDeProveedor(nombre) {
+  const p = PROVEEDORES_PLAZO.find(x => x.nombre.toLowerCase() === (nombre || '').trim().toLowerCase());
+  return p && p.plazo_pago_dias != null ? { dias: p.plazo_pago_dias, definido: true } : { dias: 7, definido: false };
+}
+
+// Si es una deuda, avisa en qué fecha va a vencer (entra sola al calendario de pagos).
+function actualizarAvisoVencimiento() {
+  const aviso = document.getElementById('ie-aviso-venc');
+  const esDeuda = document.getElementById('ie-forma').value === 'deuda_proveedores';
+  if (!esDeuda) { aviso.classList.add('oculto'); return; }
+  const fecha = document.getElementById('ie-fecha').value;
+  const plazo = plazoDeProveedor(document.getElementById('ie-proveedor').value);
+  let txt = 'Esta deuda entra al calendario de pagos';
+  if (fecha) {
+    const v = new Date(fecha + 'T00:00:00');
+    v.setDate(v.getDate() + plazo.dias);
+    txt += ` y vence el ${v.toLocaleDateString('es-AR')} (${plazo.dias} días${plazo.definido ? '' : ', plazo estándar: este proveedor no tiene plazo cargado'}).`;
+  }
+  aviso.textContent = txt;
+  aviso.classList.remove('oculto');
+}
+['ie-forma', 'ie-fecha', 'ie-proveedor'].forEach(id => {
+  document.getElementById(id).addEventListener('input', actualizarAvisoVencimiento);
+  document.getElementById(id).addEventListener('change', actualizarAvisoVencimiento);
+});
 
 document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
   const concepto = document.getElementById('ie-concepto').value.trim();
   const monto = Number(document.getElementById('ie-monto').value || 0);
   if (!concepto || !monto) { alert('Completá concepto y monto.'); return; }
-  const tieneIva = document.getElementById('ie-tiene-iva').checked;
-  const estadoPago = document.getElementById('ie-estado-pago').value;
+  const forma = document.getElementById('ie-forma').value;
   const proveedorNombre = document.getElementById('ie-proveedor').value.trim();
+  if (forma === 'deuda_proveedores' && !proveedorNombre) { alert('Para una deuda tenés que indicar el proveedor.'); return; }
 
   let proveedorId = null;
   if (proveedorNombre) {
@@ -2113,17 +2191,18 @@ document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
     }
   }
 
+  const fecha = document.getElementById('ie-fecha').value;
+  const esDeuda = forma === 'deuda_proveedores';
   const registro = {
-    fecha: document.getElementById('ie-fecha').value,
+    fecha,
     proveedor_id: proveedorId,
     concepto,
     factura_numero: document.getElementById('ie-factura-numero').value.trim() || null,
     monto,
-    tiene_iva: tieneIva,
-    iva_pct: tieneIva ? Number(document.getElementById('ie-iva-pct').value) : null,
-    estado_pago: estadoPago,
-    medio_pago: estadoPago === 'pagado' ? document.getElementById('ie-medio-pago').value : null,
-    fecha_pago: estadoPago === 'pagado' ? document.getElementById('ie-fecha').value : null,
+    forma,
+    estado_pago: esDeuda ? 'pendiente' : 'pagado',
+    medio_pago: forma === 'egreso_efectivo' ? 'efectivo' : (forma === 'egreso_banco' ? 'banco' : null),
+    fecha_pago: esDeuda ? null : fecha,
     origen: 'manual',
     usuario_id: USUARIO_ACTUAL.id,
     observaciones: document.getElementById('ie-observaciones').value.trim() || null
@@ -2132,6 +2211,178 @@ document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
   if (error) { alert('Error al guardar: ' + error.message); return; }
   document.getElementById('ingreso-egreso-form').classList.add('oculto');
   cargarListaIngresosEgresos();
+};
+
+// ---------- Calendario de pagos a proveedores (admin) ----------
+let CALENDARIO = [];
+let calendarioVerPagados = false;
+let calendarioEditandoId = null;
+
+document.getElementById('btn-nav-calendario').onclick = async () => {
+  document.getElementById('calendario-form').classList.add('oculto');
+  mostrarPantalla('calendario');
+  await cargarCalendario();
+};
+document.getElementById('btn-volver-calendario').onclick = () => irAHome();
+document.getElementById('btn-calendario-ver-pagados').onclick = () => {
+  calendarioVerPagados = !calendarioVerPagados;
+  document.getElementById('btn-calendario-ver-pagados').textContent = calendarioVerPagados ? 'Ocultar pagados' : 'Ver pagados recientes';
+  renderCalendario();
+};
+
+function diasHasta(fechaIso) {
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const f = new Date(fechaIso + 'T00:00:00');
+  return Math.round((f - hoy) / 86400000);
+}
+
+async function cargarCalendario() {
+  const cont = document.getElementById('calendario-lista');
+  cont.innerHTML = 'Cargando...';
+  try {
+    const hace30 = new Date(); hace30.setDate(hace30.getDate() - 30);
+    const [pend, pag] = await Promise.all([
+      sb.from('calendario_pagos').select('*').eq('pagado', false).order('fecha_vencimiento').limit(1000),
+      sb.from('calendario_pagos').select('*').eq('pagado', true).gte('fecha_vencimiento', hace30.toISOString().slice(0, 10)).order('fecha_vencimiento', { ascending: false }).limit(300)
+    ]);
+    if (pend.error) throw pend.error;
+    if (pag.error) throw pag.error;
+    CALENDARIO = (pend.data || []).concat(pag.data || []);
+    renderCalendario();
+  } catch (e) {
+    cont.innerHTML = `<div class="estado-box estado-error">${e.message}</div>`;
+  }
+}
+
+function renderCalendario() {
+  const cont = document.getElementById('calendario-lista');
+  const pendientes = CALENDARIO.filter(c => !c.pagado);
+  const total = pendientes.reduce((a, c) => a + Number(c.total), 0);
+  const vencidos = pendientes.filter(c => diasHasta(c.fecha_vencimiento) < 0);
+  const semana = pendientes.filter(c => { const d = diasHasta(c.fecha_vencimiento); return d >= 0 && d <= 7; });
+  const sumar = (l) => l.reduce((a, c) => a + Number(c.total), 0);
+  document.getElementById('calendario-resumen').innerHTML = `
+    <div class="desglose-fila"><span>Total pendiente (${pendientes.length})</span><span>${formatoPesos(total)}</span></div>
+    <div class="desglose-fila"><span class="${vencidos.length ? 'bajo-minimo' : ''}">Vencidos (${vencidos.length})</span><span class="${vencidos.length ? 'bajo-minimo' : ''}">${formatoPesos(sumar(vencidos))}</span></div>
+    <div class="desglose-fila"><span>Vencen en los próximos 7 días (${semana.length})</span><span>${formatoPesos(sumar(semana))}</span></div>`;
+
+  const grupos = [
+    ['Vencidos', pendientes.filter(c => diasHasta(c.fecha_vencimiento) < 0), true],
+    ['Esta semana (próximos 7 días)', pendientes.filter(c => { const d = diasHasta(c.fecha_vencimiento); return d >= 0 && d <= 7; }), true],
+    ['Próximos 30 días', pendientes.filter(c => { const d = diasHasta(c.fecha_vencimiento); return d > 7 && d <= 30; }), false],
+    ['Más adelante', pendientes.filter(c => diasHasta(c.fecha_vencimiento) > 30), false]
+  ];
+  if (calendarioVerPagados) grupos.push(['Pagados (últimos 30 días)', CALENDARIO.filter(c => c.pagado), false]);
+
+  const itemHtml = (c) => {
+    const d = diasHasta(c.fecha_vencimiento);
+    const cuando = c.pagado ? `pagado ${c.fecha_pago ? new Date(c.fecha_pago + 'T00:00:00').toLocaleDateString('es-AR') : ''}`
+      : (d < 0 ? `vencido hace ${-d} día${d === -1 ? '' : 's'}` : (d === 0 ? 'vence HOY' : `vence en ${d} día${d === 1 ? '' : 's'}`));
+    const rojo = !c.pagado && d < 0;
+    return `<div class="lista-item" style="${rojo ? 'border-color:var(--rojo)' : ''}">
+      <div>
+        <div class="nombre">${c.proveedor_texto}</div>
+        <div class="sub">${new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')} · <span class="${rojo ? 'bajo-minimo' : ''}">${cuando}</span>${c.nro_factura ? ' · Fact. ' + c.nro_factura : ''}${c.concepto ? ' · ' + c.concepto : ''}</div>
+        ${c.nota ? `<div class="sub">${c.nota}</div>` : ''}
+      </div>
+      <div style="text-align:right;flex:none">
+        <div class="nombre">${formatoPesos(c.total)}</div>
+        ${c.pagado ? '' : `<button type="button" class="secundario btn-cal-pagar" data-id="${c.id}" style="width:auto;padding:6px 12px;margin:4px 0 0">Pagar</button>
+        <button type="button" class="secundario btn-cal-editar" data-id="${c.id}" style="width:auto;padding:6px 12px;margin:4px 0 0">Editar</button>`}
+      </div>
+    </div>`;
+  };
+
+  const html = grupos.filter(g => g[1].length).map(([titulo, items, abierto]) => `
+    <details class="grupo-stock"${abierto ? ' open' : ''}>
+      <summary><span>${titulo} <span class="grupo-cant">(${items.length} · ${formatoPesos(sumar(items))})</span></span></summary>
+      <div class="grupo-stock-body">${items.map(itemHtml).join('')}</div>
+    </details>`).join('');
+  cont.innerHTML = html || '<div class="aviso">No hay pagos pendientes. 👍</div>';
+
+  cont.querySelectorAll('.btn-cal-pagar').forEach(b => { b.onclick = () => abrirPagoCalendario(b.dataset.id); });
+  cont.querySelectorAll('.btn-cal-editar').forEach(b => { b.onclick = () => abrirEditarCalendario(b.dataset.id); });
+}
+
+function abrirPagoCalendario(id) {
+  const c = CALENDARIO.find(x => x.id === id);
+  if (!c) return;
+  calendarioEditandoId = id;
+  document.getElementById('cal-form-titulo').textContent = `Pagar a ${c.proveedor_texto} · ${formatoPesos(c.total)}`;
+  document.getElementById('cal-modo').value = 'pagar';
+  document.getElementById('cal-wrap-pagar').classList.remove('oculto');
+  document.getElementById('cal-wrap-editar').classList.add('oculto');
+  document.getElementById('cal-pago-forma').value = 'egreso_banco';
+  document.getElementById('cal-pago-fecha').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('cal-resultado').innerHTML = '';
+  document.getElementById('calendario-form').classList.remove('oculto');
+  document.getElementById('calendario-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function abrirEditarCalendario(id) {
+  const c = CALENDARIO.find(x => x.id === id);
+  if (!c) return;
+  calendarioEditandoId = id;
+  document.getElementById('cal-form-titulo').textContent = c ? `Editar pago de ${c.proveedor_texto}` : 'Nuevo pago';
+  document.getElementById('cal-modo').value = 'editar';
+  document.getElementById('cal-wrap-pagar').classList.add('oculto');
+  document.getElementById('cal-wrap-editar').classList.remove('oculto');
+  document.getElementById('cal-ed-proveedor').value = c.proveedor_texto;
+  document.getElementById('cal-ed-venc').value = c.fecha_vencimiento;
+  document.getElementById('cal-ed-total').value = c.total;
+  document.getElementById('cal-ed-nro').value = c.nro_factura || '';
+  document.getElementById('cal-ed-nota').value = c.nota || '';
+  document.getElementById('cal-resultado').innerHTML = '';
+  document.getElementById('calendario-form').classList.remove('oculto');
+  document.getElementById('calendario-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('btn-calendario-nuevo').onclick = () => {
+  calendarioEditandoId = null;
+  document.getElementById('cal-form-titulo').textContent = 'Nuevo pago en el calendario';
+  document.getElementById('cal-modo').value = 'nuevo';
+  document.getElementById('cal-wrap-pagar').classList.add('oculto');
+  document.getElementById('cal-wrap-editar').classList.remove('oculto');
+  document.getElementById('cal-ed-proveedor').value = '';
+  document.getElementById('cal-ed-venc').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('cal-ed-total').value = '';
+  document.getElementById('cal-ed-nro').value = '';
+  document.getElementById('cal-ed-nota').value = '';
+  document.getElementById('cal-resultado').innerHTML = '';
+  document.getElementById('calendario-form').classList.remove('oculto');
+  document.getElementById('calendario-form').scrollIntoView({ behavior: 'smooth' });
+};
+document.getElementById('btn-cal-cancelar').onclick = () => {
+  document.getElementById('calendario-form').classList.add('oculto');
+};
+document.getElementById('btn-cal-confirmar').onclick = async () => {
+  const modo = document.getElementById('cal-modo').value;
+  const res = document.getElementById('cal-resultado');
+  res.innerHTML = '';
+  if (modo === 'pagar') {
+    const { error } = await sb.rpc('pagar_calendario', {
+      p_id: calendarioEditandoId,
+      p_forma: document.getElementById('cal-pago-forma').value,
+      p_fecha: document.getElementById('cal-pago-fecha').value
+    });
+    if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+  } else {
+    const total = Number(document.getElementById('cal-ed-total').value || 0);
+    const prov = document.getElementById('cal-ed-proveedor').value.trim();
+    const venc = document.getElementById('cal-ed-venc').value;
+    if (!prov || !total || !venc) { res.innerHTML = '<div class="estado-box estado-error">Completá proveedor, vencimiento y monto.</div>'; return; }
+    const campos = {
+      proveedor_texto: prov, fecha_vencimiento: venc, total,
+      nro_factura: document.getElementById('cal-ed-nro').value.trim() || null,
+      nota: document.getElementById('cal-ed-nota').value.trim() || null
+    };
+    const { error } = modo === 'editar'
+      ? await sb.from('calendario_pagos').update(campos).eq('id', calendarioEditandoId)
+      : await sb.from('calendario_pagos').insert({ ...campos, origen: 'app' });
+    if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+  }
+  document.getElementById('calendario-form').classList.add('oculto');
+  await cargarCalendario();
 };
 
 // ---------- Init ----------
