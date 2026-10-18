@@ -1242,10 +1242,10 @@ document.getElementById('btn-guardar-desperdicio').onclick = async () => {
 
 // ---------- Stock (lectura, con buscador y agrupado por categoría) ----------
 let STOCK_DATA = [];
-const ORDEN_SUBCATEGORIAS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'kutsi', 'panes', 'descartables', 'cocina'];
+const ORDEN_SUBCATEGORIAS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'kutsi', 'cocina', 'panes', 'descartables'];
 const ETIQUETA_SUBCATEGORIA = {
   'vermut': 'Vermut', 'cerveza y sin alcohol': 'Cerveza y sin alcohol', 'fiambres': 'Fiambres',
-  'quesos': 'Quesos', 'kutsi': 'Kutsi', 'panes': 'Panes', 'descartables': 'Descartables y packaging', 'cocina': 'Cocina'
+  'quesos': 'Quesos', 'kutsi': 'Kutsi', 'panes': 'Panes', 'descartables': 'Packaging', 'cocina': 'Cocina'
 };
 
 document.getElementById('btn-nav-stock').onclick = async () => {
@@ -1294,7 +1294,7 @@ function renderStockLista(filtro) {
     const filas = items.map(s => {
       const bajo = Number(s.cantidad_actual) <= Number(s.stock_minimo);
       return `<div class="lista-item">
-        +'(sin nombre)'}</div>
+        <div><div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div>${s.insumos?.marca ? `<div class="sub">${s.insumos.marca}</div>` : ''}</div>
         <div class="stock-edit-wrap">
           <input type="number" step="0.01" class="stock-cantidad-input ${bajo ? 'bajo-minimo' : ''}" data-insumo-id="${s.insumo_id}" value="${Number(s.cantidad_actual)}">
           <span class="stock-guardado" data-insumo-id="${s.insumo_id}"></span>
@@ -1463,15 +1463,15 @@ async function cargarAlertas() {
 
 // ---------- Precios de insumos (carga manual por lista de precios) ----------
 // Categorías de la hoja Costos Variables (el orden es el de la pantalla).
-const ORDEN_SUBCATEGORIAS_PRECIOS = ['fiambres', 'quesos', 'kutsi', 'vermut', 'cerveza y sin alcohol', 'panes', 'descartables', 'cocina', 'preparaciones'];
+const ORDEN_SUBCATEGORIAS_PRECIOS = ['fiambres', 'quesos', 'kutsi', 'cocina', 'vermut', 'cerveza y sin alcohol', 'panes', 'descartables', 'preparaciones'];
 const ETIQUETA_INSUMOS = {
   'fiambres': 'Fiambres', 'quesos': 'Quesos', 'kutsi': 'Kutsi', 'vermut': 'Vermut',
   'cerveza y sin alcohol': 'Cerveza y sin alcohol', 'panes': 'Panes',
-  'descartables': 'Descartables y packaging', 'cocina': 'Cocina (otros)', 'preparaciones': 'Preparaciones'
+  'descartables': 'Packaging', 'cocina': 'Cocina', 'preparaciones': 'Preparaciones'
 };
 // Categorías en las que se puede crear un insumo nuevo, y en qué se mide por defecto.
 const CATEGORIAS_NUEVO_INSUMO = [
-  ['fiambres', 'kg'], ['quesos', 'kg'], ['kutsi', 'kg'], ['vermut', 'unidad'],
+  ['fiambres', 'kg'], ['quesos', 'kg'], ['kutsi', 'kg'], ['cocina', 'kg'], ['vermut', 'unidad'],
   ['cerveza y sin alcohol', 'unidad'], ['panes', 'unidad'], ['descartables', 'unidad']
 ];
 
