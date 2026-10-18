@@ -179,6 +179,14 @@
   .eerr-nota{font-size:11.5px; color:var(--gris); font-weight:400;}
   .eerr-ok{color:var(--verde); font-weight:700;}
   .eerr-prev{color:var(--gris);}
+  .desglose-fila > span:first-child{flex:1; padding-right:12px;}
+  .desglose-fila > span:last-child{text-align:right;}
+  .eerr-tabs{display:flex; gap:8px; margin:12px 0;}
+  .eerr-tab{flex:1; padding:10px; border-radius:10px; border:2px solid var(--negro); background:transparent; font-weight:700; cursor:pointer; margin:0;}
+  .eerr-tab.activa{background:var(--negro); color:var(--blanco);}
+  .eerr-ayuda{font-size:12px; color:var(--gris); font-weight:400; line-height:1.35; margin-top:2px;}
+  .eerr-barra{height:8px; border-radius:4px; background:rgba(26,26,26,0.12); margin-top:4px; overflow:hidden;}
+  .eerr-barra > span{display:block; height:100%; background:var(--negro);}
 </style>
 </head>
 <body>
@@ -507,8 +515,13 @@
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px;text-transform:none;font-size:14px"><input type="checkbox" id="eerr-comparar" style="width:auto;margin:0" checked> Comparar con el mismo período del año anterior</label>
     </div>
+    <div class="eerr-tabs">
+      <button type="button" class="eerr-tab activa" id="eerr-tab-res">Resultados</button>
+      <button type="button" class="eerr-tab" id="eerr-tab-fin">Estado financiero</button>
+    </div>
     <div id="eerr-resumen"></div>
     <div id="eerr-tabla"></div>
+    <div id="eerr-fin" class="oculto"></div>
     <button class="secundario" id="btn-eerr-datos">Cargar datos del mes (stock, saldos, costo teórico...)</button>
     <div id="eerr-form" class="card oculto">
       <h2 class="section-title" style="margin-top:0" id="eerr-form-titulo">Datos del mes</h2>
@@ -2362,6 +2375,7 @@ async function cargarEERR() {
   try {
     const actual = await datosPeriodoEERR(modo, valor);
     EERR_ACTUAL = { modo, valor, actual };
+    mostrarVistaEERR(EERR_VISTA);
     if (!actual.meses.length || actual.meses.every(m => !Object.keys(m.egr).length && !m.caja.efe && !m.caja.tc)) {
       tabla.innerHTML = '<div class="aviso">No hay datos cargados en este período.</div>';
       return;
@@ -2384,13 +2398,15 @@ async function cargarEERR() {
 function renderEERR(r, rPrev, modo, valor) {
   const v = r.v, p = r.p;
   const res = v.resultado, resF = v.res_final;
+  const real = p.real;
+  const sem = (ok) => ok ? 'eerr-ok' : 'bajo-minimo';
   document.getElementById('eerr-resumen').innerHTML = `
     <div class="card">
-      <div class="desglose-fila"><span>Venta total</span><span><b>${fmtPesosEntero(v.venta)}</b></span></div>
-      <div class="desglose-fila"><span>Costo de mercadería real</span><span>${pctTxt(p.real)} <span class="grupo-cant">(objetivo 36%)</span></span></div>
-      <div class="desglose-fila total"><span>Resultado</span><span class="${res < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(res)} · ${pctTxt(p.resultado)}</span></div>
-      <div class="desglose-fila"><span>Resultado final (después de pagos de deudas)</span><span class="${resF < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(resF)}</span></div>
-      <div class="desglose-fila"><span>Resultado en plata (sumando la deuda generada)</span><span class="${v.res_plata < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(v.res_plata)}</span></div>
+      <div class="desglose-fila"><span>1. Cuánto vendiste<div class="eerr-ayuda">Todo lo que se cobró en el período: tarjetas, transferencias, QR y efectivo.</div></span><span><b>${fmtPesosEntero(v.venta)}</b></span></div>
+      <div class="desglose-fila"><span>2. Cuánto se va en mercadería<div class="eerr-ayuda">De cada $100 que vendiste, esto se fue en comprar mercadería (fiambres, vermut, pan, verdura...) ajustado por lo que sobró en stock. Menos es mejor: tu objetivo es 36%.</div></span><span class="${sem(real <= 0.36)}">${pctTxt(real)}</span></div>
+      <div class="desglose-fila total"><span>3. Resultado<div class="eerr-ayuda">Lo que ganaste: ventas menos TODOS los costos del período (mercadería, comisiones e impuestos, sueldos, alquiler, gastos fijos y otros, IVA). Las compras a crédito cuentan cuando se compran, aunque todavía no las hayas pagado. Tu objetivo es 25%.</div></span><span class="${sem(p.resultado >= 0.25)}">${fmtPesosEntero(res)}<br>${pctTxt(p.resultado)}</span></div>
+      <div class="desglose-fila"><span>4. Resultado final<div class="eerr-ayuda">Es el resultado menos la plata que además pagaste en el período por otras cosas: deudas de meses anteriores con proveedores, obras, bienes de uso y retiros. Así lo calcula hoy tu planilla.</div></span><span class="${resF < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(resF)}</span></div>
+      <div class="desglose-fila"><span>5. Resultado en plata<div class="eerr-ayuda">Lo que realmente te quedó en el bolsillo: como el anterior, pero sumando lo que compraste a crédito y todavía no pagaste (esa plata sigue siendo tuya por ahora).</div></span><span class="${v.res_plata < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(v.res_plata)}</span></div>
     </div>`;
   const prevPorKey = {};
   if (rPrev) rPrev.lineas.forEach(l => { if (l.key) prevPorKey[l.key] = l; });
@@ -2415,7 +2431,165 @@ function renderEERR(r, rPrev, modo, valor) {
   document.getElementById('eerr-tabla').innerHTML = html;
 }
 
+// ---------- Estado financiero detallado (pestaña del estado de resultados) ----------
+let EERR_VISTA = 'res';
+const GRUPOS_EGRESO = [
+  ['Mercadería (compras pagadas al contado)', ['BEBIDA CON ALCOHOL', 'VERMUT', 'INSUMOS BARRA', 'BEBIDA SIN ALCOHOL', 'COCINA', 'FIAMBRES Y QUESOS', 'PAN', 'VERDULERIA', 'COMIDA DE PERSONAL', 'CERVEZA', 'CARNICERIA', 'VINOS', 'MERCADERIA PARA EMPLEADOS']],
+  ['Pago de deudas con proveedores', ['PAGO DEUDA PROVEEDORES']],
+  ['Sueldos y cargas', ['PERSONAL*', 'CARGAS SOCIALES - APORTES Y CONTRIB.', 'SINDICATO', 'AGUINALDOS, VACACIONES', 'LIQUIDACION FINAL', 'LIQUIDACIONES', 'ADELANTOS']],
+  ['Alquiler y expensas', ['ALQUILER', 'EXPENSAS / GASTOS COMUNES']],
+  ['Servicios y costos fijos', ['LUZ', 'AGUA', 'GAS', 'INTERNET, TELEFONIA, NUBES', 'ABONO SISTEMA', 'HONORARIOS PROFESIONALES', 'SEGUROS', 'URGENCIAS', 'AUTONOMOS', 'ANTICIPO GANANCIAS', 'ADT SECURITY SERVICES', 'ADICAPIF', 'SADAIC', 'BROMATOLOGA', 'DESINFECCION', 'RECOLECCION BASURA']],
+  ['Impuestos y comisiones', ['IVA', 'INGRESOS BRUTOS', 'CONTRIBUCION MUNICIPAL', 'ARANCELES POR VTA CON TARJETAS', 'COMISION MERCADO PAGO', 'IMPUESTO AL DEBITO Y CREDITO', 'GASTOS BANCARIOS']],
+  ['Obras, bienes de uso y retiros', ['COMPRA DE BIENES DE USO', 'PAGO DEUDA', 'REMODELACIONES', 'RETIRO SOCIO', 'OTROS EGRESOS']]
+];
+const GRUPO_OTROS = 'Otros gastos (limpieza, descartables, marketing, mantenimiento...)';
+
+function grupoDeConcepto(clave) {
+  for (const [nombre, lista] of GRUPOS_EGRESO) {
+    for (const c of lista) {
+      const k = GM_EERR.normKey(c.replace('*', ''));
+      if (c.endsWith('*') ? clave.indexOf(k) === 0 : clave === k) return nombre;
+    }
+  }
+  return GRUPO_OTROS;
+}
+
+async function cargarFinanciero() {
+  const cont = document.getElementById('eerr-fin');
+  cont.innerHTML = 'Calculando...';
+  const { modo, valor, actual } = EERR_ACTUAL;
+  const desde = modo === 'mes' ? valor + '-01' : valor + '-01-01';
+  const hasta = modo === 'mes' ? ultimoDiaDelMes(valor) : valor + '-12-31';
+  try {
+    const { data, error } = await sb.rpc('eerr_financiero', { p_desde: desde, p_hasta: hasta });
+    if (error) throw error;
+    renderFinanciero(data, actual, modo, valor);
+  } catch (e) {
+    cont.innerHTML = `<div class="estado-box estado-error">${e.message}</div>`;
+  }
+}
+
+function filaFin(label, valor, opts) {
+  opts = opts || {};
+  return `<div class="desglose-fila${opts.total ? ' total' : ''}"><span>${label}${opts.ayuda ? `<div class="eerr-ayuda">${opts.ayuda}</div>` : ''}</span><span class="${opts.clase || ''}">${opts.texto || fmtPesosEntero(valor)}</span></div>`;
+}
+
+function renderFinanciero(fin, actual, modo, valor) {
+  const cont = document.getElementById('eerr-fin');
+  const base = actual.meses.length === 1 ? actual.meses[0] : GM_EERR.combinarMeses(actual.meses);
+  const c = base.caja;
+  const n = (x) => Number(x) || 0;
+  const ventaElectronica = n(c.tc) + n(c.td) + n(c.tr) + n(c.qp) + n(c.mp);
+  const ventaEfectivo = n(c.efe);
+  const ventas = ventaElectronica + ventaEfectivo;
+  const egr = base.egr;
+  const sumaForma = (forma) => Object.keys(egr).filter(k => k.endsWith('|' + forma)).reduce((a, k) => a + n(egr[k]), 0);
+  const ingNH = (egr[GM_EERR.normKey('INGRESOS NO HABITUALES') + '|otros_ingresos'] || 0) + (egr[GM_EERR.normKey('INGRESOS NO HABITUALES') + '|acred_banco'] || 0);
+
+  // Salidas de plata (efectivo y banco) agrupadas
+  const grupos = {};
+  Object.keys(egr).forEach(k => {
+    const [concepto, forma] = k.split('|');
+    if (forma !== 'egreso_banco' && forma !== 'egreso_efectivo' && forma !== 'acred_banco') return;
+    if (concepto === GM_EERR.normKey('INGRESOS NO HABITUALES')) return;
+    const g = grupoDeConcepto(concepto);
+    grupos[g] = grupos[g] || { efe: 0, banco: 0 };
+    if (forma === 'egreso_efectivo') grupos[g].efe += n(egr[k]); else grupos[g].banco += n(egr[k]);
+  });
+  const ordenGrupos = GRUPOS_EGRESO.map(g => g[0]).concat([GRUPO_OTROS]);
+  let totalEfe = 0, totalBanco = 0;
+  ordenGrupos.forEach(g => { if (grupos[g]) { totalEfe += grupos[g].efe; totalBanco += grupos[g].banco; } });
+  const totalSalidas = totalEfe + totalBanco;
+  const entradas = ventas + ingNH;
+  const flujo = entradas - totalSalidas;
+
+  // Deudas con proveedores
+  const aCredito = sumaForma('deuda_proveedores');
+  const pagadoDeudas = (grupos['Pago de deudas con proveedores'] ? grupos['Pago de deudas con proveedores'].efe + grupos['Pago de deudas con proveedores'].banco : 0);
+  const pend = n(fin.pendiente), venc = n(fin.vencido);
+
+  let html = '';
+  html += `<div class="card"><h2 class="section-title" style="margin-top:0">1. ¿Cuánta plata entró?</h2>
+    ${filaFin('Ventas en efectivo', ventaEfectivo)}
+    ${filaFin('Ventas con tarjeta, transferencia y QR', ventaElectronica, { ayuda: 'Tarjeta de crédito ' + fmtPesosEntero(c.tc) + ' · débito ' + fmtPesosEntero(c.td) + ' · transferencia ' + fmtPesosEntero(c.tr) + ' · QR ' + fmtPesosEntero(n(c.qp) + n(c.mp)) })}
+    ${filaFin('Ingresos no habituales', ingNH)}
+    ${filaFin('Total que entró', entradas, { total: true })}
+    <div class="eerr-ayuda">Las tarjetas y los QR se acreditan unos días después de la venta; acá se cuentan el día que se vendió.</div></div>`;
+
+  html += `<div class="card"><h2 class="section-title" style="margin-top:0">2. ¿A dónde se fue la plata?</h2>
+    <div class="eerr-ayuda">Solo plata que salió de verdad (efectivo o banco). Las compras a crédito no están acá hasta que se pagan.</div>`;
+  const filasG = ordenGrupos.filter(g => grupos[g]).map(g => {
+    const t = grupos[g].efe + grupos[g].banco;
+    const pct = totalSalidas ? t / totalSalidas : 0;
+    return `<div class="desglose-fila"><span>${g}<div class="eerr-ayuda">Efectivo ${fmtPesosEntero(grupos[g].efe)} · Banco ${fmtPesosEntero(grupos[g].banco)}</div><div class="eerr-barra"><span style="width:${Math.round(pct * 100)}%"></span></div></span><span>${fmtPesosEntero(t)}<div class="eerr-ayuda" style="text-align:right">${pctTxt(pct)}</div></span></div>`;
+  }).join('');
+  html += filasG + filaFin('Total que salió', totalSalidas, { total: true }) + '</div>';
+
+  html += `<div class="card"><h2 class="section-title" style="margin-top:0">3. ¿Cuánta plata quedó?</h2>
+    ${filaFin('Entró', entradas)}
+    ${filaFin('Salió', -totalSalidas)}
+    ${filaFin('Quedó en el período', flujo, { total: true, clase: flujo < 0 ? 'bajo-minimo' : 'eerr-ok' })}
+    <div class="eerr-ayuda">Es la plata que movió el negocio, no la ganancia: no incluye las compras a crédito todavía sin pagar ni el cambio de stock. Para la ganancia mirá la pestaña Resultados.</div></div>`;
+
+  html += `<div class="card"><h2 class="section-title" style="margin-top:0">4. Deudas con proveedores</h2>
+    ${filaFin('Compras a crédito del período', aCredito, { ayuda: 'Mercadería y gastos que se compraron y quedaron a pagar.' })}
+    ${filaFin('Pagos de deudas del período', pagadoDeudas, { ayuda: 'Plata que pagaste a proveedores por compras anteriores.' })}
+    ${filaFin('La deuda ' + (aCredito - pagadoDeudas >= 0 ? 'aumentó' : 'bajó') + ' en', Math.abs(aCredito - pagadoDeudas), { total: true })}
+    ${filaFin('Pendiente de pago hoy (calendario)', pend, { ayuda: 'Todo lo que figura sin pagar en el calendario de pagos, de cualquier fecha.' })}
+    ${filaFin('De eso, ya vencido', venc, { clase: venc > 0 ? 'bajo-minimo' : '' })}</div>`;
+
+  const provs = (fin.proveedores || []).slice(0, 12);
+  if (provs.length) {
+    html += `<div class="card"><h2 class="section-title" style="margin-top:0">5. Proveedores del período</h2><div class="eerr-ayuda">Los 12 a los que más se les compró.</div>
+      <table class="tabla-eerr"><thead><tr><th>Proveedor</th><th>Compras</th><th>A crédito</th><th>Pagos deuda</th></tr></thead><tbody>` +
+      provs.map(p => `<tr><td>${p.p}</td><td class="num">${fmtPesosEntero(p.compras)}</td><td class="num">${fmtPesosEntero(p.a_credito)}</td><td class="num">${fmtPesosEntero(p.pagos)}</td></tr>`).join('') + '</tbody></table></div>';
+  }
+
+  if (modo === 'mes') {
+    const dias = fin.dias || [];
+    let acum = 0;
+    const filasD = dias.map(d => {
+      acum += n(d.efe) - n(d.egr);
+      return `<tr><td>${new Date(d.f + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</td><td class="num">${fmtPesosEntero(d.efe)}</td><td class="num">${fmtPesosEntero(d.egr)}</td><td class="num ${acum < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(acum)}</td></tr>`;
+    }).join('');
+    html += `<div class="card"><h2 class="section-title" style="margin-top:0">6. Efectivo día por día</h2>
+      <div class="eerr-ayuda">Ventas en efectivo, pagos en efectivo y cuánto va quedando acumulado en el mes.</div>
+      <table class="tabla-eerr"><thead><tr><th>Día</th><th>Entró</th><th>Salió</th><th>Acumulado</th></tr></thead><tbody>${filasD || '<tr><td colspan="4">Sin movimientos</td></tr>'}</tbody></table></div>`;
+  } else {
+    html += `<div class="card"><h2 class="section-title" style="margin-top:0">6. Mes por mes</h2><table class="tabla-eerr"><thead><tr><th>Mes</th><th>Ventas</th><th>Salió</th><th>Quedó</th></tr></thead><tbody>` +
+      actual.meses.map((m, i) => {
+        const cc = m.caja || {};
+        const v = n(cc.tc) + n(cc.td) + n(cc.tr) + n(cc.qp) + n(cc.mp) + n(cc.efe);
+        let sal = 0;
+        Object.keys(m.egr).forEach(k => { const f = k.split('|')[1]; if (f === 'egreso_banco' || f === 'egreso_efectivo' || f === 'acred_banco') sal += n(m.egr[k]); });
+        const nh = (m.egr[GM_EERR.normKey('INGRESOS NO HABITUALES') + '|otros_ingresos'] || 0) + (m.egr[GM_EERR.normKey('INGRESOS NO HABITUALES') + '|acred_banco'] || 0);
+        const q = v + nh - (sal - nh);
+        return `<tr><td>${etiquetaMes(actual.claves[i])}</td><td class="num">${fmtPesosEntero(v)}</td><td class="num">${fmtPesosEntero(sal)}</td><td class="num ${q < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(q)}</td></tr>`;
+      }).join('') + '</tbody></table></div>';
+  }
+  html += `<div class="card"><h2 class="section-title" style="margin-top:0">Saldos que cargaste a mano</h2>
+    ${filaFin('Mercado Pago', n(base.manual.saldo_mercado_pago))}
+    ${filaFin('Banco Nación', n(base.manual.saldo_banco))}
+    ${filaFin('A cobrar de tarjetas (aprox.)', n(base.manual.a_cobrar_tarjetas))}
+    ${filaFin('Fondo de inversión', n(base.manual.fondo_inversion))}
+    <div class="eerr-ayuda">Se cargan desde la pestaña Resultados, con el botón "Cargar datos del mes".</div></div>`;
+  document.getElementById('eerr-fin').innerHTML = html;
+}
+
+function mostrarVistaEERR(vista) {
+  EERR_VISTA = vista;
+  document.getElementById('eerr-tab-res').classList.toggle('activa', vista === 'res');
+  document.getElementById('eerr-tab-fin').classList.toggle('activa', vista === 'fin');
+  ['eerr-resumen', 'eerr-tabla', 'btn-eerr-datos'].forEach(id => document.getElementById(id).classList.toggle('oculto', vista !== 'res' || (id === 'btn-eerr-datos' && document.getElementById('eerr-modo').value !== 'mes')));
+  document.getElementById('eerr-fin').classList.toggle('oculto', vista !== 'fin');
+  if (vista !== 'res') document.getElementById('eerr-form').classList.add('oculto');
+  if (vista === 'fin' && EERR_ACTUAL) cargarFinanciero();
+}
+document.getElementById('eerr-tab-res').onclick = () => mostrarVistaEERR('res');
+document.getElementById('eerr-tab-fin').onclick = () => mostrarVistaEERR('fin');
+
 document.getElementById('btn-nav-eerr').onclick = async () => {
+  EERR_VISTA = 'res';
   llenarPeriodosEERR();
   mostrarPantalla('eerr');
   await cargarEERR();
