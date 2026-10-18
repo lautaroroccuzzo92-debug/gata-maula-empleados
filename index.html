@@ -168,6 +168,17 @@
   .precio-estado{font-size:12px; font-weight:700; min-height:14px;}
   .precio-estado.ok{color:var(--verde);}
   .precio-estado.alerta{color:var(--rojo);}
+  .tabla-eerr{width:100%; border-collapse:collapse; font-size:13.5px; background:rgba(255,255,255,0.6); border-radius:12px; overflow:hidden;}
+  .tabla-eerr th{background:var(--negro); color:var(--blanco); padding:8px; text-align:right; font-size:12px;}
+  .tabla-eerr th:first-child{text-align:left;}
+  .tabla-eerr td{padding:7px 8px; border-bottom:1px solid rgba(26,26,26,0.08); vertical-align:top;}
+  .tabla-eerr td.num{text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums;}
+  .tabla-eerr tr.eerr-titulo td{background:rgba(26,26,26,0.12); font-weight:700; letter-spacing:0.5px; font-size:12px; text-transform:uppercase;}
+  .tabla-eerr tr.eerr-total td{font-weight:700; background:rgba(255,255,255,0.5);}
+  .tabla-eerr tr.eerr-resultado td{font-weight:700; background:rgba(58,125,68,0.12); border-top:2px solid var(--negro);}
+  .eerr-nota{font-size:11.5px; color:var(--gris); font-weight:400;}
+  .eerr-ok{color:var(--verde); font-weight:700;}
+  .eerr-prev{color:var(--gris);}
 </style>
 </head>
 <body>
@@ -219,6 +230,7 @@
         <button class="cap-btn oculto" id="btn-nav-ingresos"><span class="emoji">🧾</span>Ingresos/Egresos</button>
         <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
         <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Insumos y precios</button>
+        <button class="cap-btn oculto" id="btn-nav-eerr"><span class="emoji">📊</span>Estado de resultados</button>
         <button class="cap-btn oculto" id="btn-nav-calendario"><span class="emoji">📅</span>Calendario de pagos<span class="badge-alertas oculto" id="badge-calendario">0</span></button>
         <button class="cap-btn oculto" id="btn-nav-alertas"><span class="emoji">🔔</span>Alertas<span class="badge-alertas oculto" id="badge-alertas">0</span></button>
       </div>
@@ -476,6 +488,39 @@
     <button class="secundario" id="btn-volver-stock">Volver</button>
   </div>
 
+  <!-- PANTALLA: ESTADO DE RESULTADOS (admin) -->
+  <div id="pantalla-eerr" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Estado de resultados</h2>
+    <div class="card">
+      <div class="fila2">
+        <div>
+          <label style="margin-top:0">Ver</label>
+          <select id="eerr-modo">
+            <option value="mes">Un mes</option>
+            <option value="anio">Todo el año</option>
+          </select>
+        </div>
+        <div>
+          <label style="margin-top:0" id="eerr-label-periodo">Mes</label>
+          <select id="eerr-periodo"></select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;text-transform:none;font-size:14px"><input type="checkbox" id="eerr-comparar" style="width:auto;margin:0" checked> Comparar con el mismo período del año anterior</label>
+    </div>
+    <div id="eerr-resumen"></div>
+    <div id="eerr-tabla"></div>
+    <button class="secundario" id="btn-eerr-datos">Cargar datos del mes (stock, saldos, costo teórico...)</button>
+    <div id="eerr-form" class="card oculto">
+      <h2 class="section-title" style="margin-top:0" id="eerr-form-titulo">Datos del mes</h2>
+      <div class="aviso">Son los datos que no salen solos de las facturas y la caja. Lo que dejes vacío no se usa.</div>
+      <div id="eerr-form-campos"></div>
+      <div id="eerr-form-resultado"></div>
+      <button class="big" id="btn-eerr-guardar">Guardar</button>
+      <button class="secundario" id="btn-eerr-cancelar">Cancelar</button>
+    </div>
+    <button class="secundario" id="btn-volver-eerr">Volver</button>
+  </div>
+
   <!-- PANTALLA: CALENDARIO DE PAGOS -->
   <div id="pantalla-calendario" class="oculto">
     <h2 class="section-title" style="margin-top:0">Calendario de pagos a proveedores</h2>
@@ -580,6 +625,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="eerr-motor.js"></script>
 <script>
 // ============================================================
 // SUPABASE — reemplaza el webhook de Apps Script / Google Sheets.
@@ -689,7 +735,7 @@ function categoriasDisponibles() {
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
@@ -745,6 +791,7 @@ function aplicarGatingPorRol() {
   document.getElementById('btn-nav-precios').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-alertas').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-calendario').classList.toggle('oculto', rol !== 'admin');
+  document.getElementById('btn-nav-eerr').classList.toggle('oculto', rol !== 'admin');
 }
 
 function irAHome() {
@@ -2211,6 +2258,203 @@ document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
   if (error) { alert('Error al guardar: ' + error.message); return; }
   document.getElementById('ingreso-egreso-form').classList.add('oculto');
   cargarListaIngresosEgresos();
+};
+
+// ---------- Estado de resultados (admin) ----------
+const CAMPOS_EERR_MANUAL = [
+  ['stock_inicio', 'Stock real de mercadería al inicio del mes ($)', 'n'],
+  ['stock_fin', 'Stock real de mercadería al final del mes ($)', 'n'],
+  ['costo_teorico_pct', 'Costo teórico según ficha de producto (% de las ventas, ej. 35,64)', 'pct'],
+  ['consumos_internos', 'Costo de consumos internos y descuentos ($)', 'n'],
+  ['desperdicios', 'Desperdicios (vacío = suma de lo cargado en la app) ($)', 'n'],
+  ['ventas_sandwiches', 'Ventas de sandwiches y picada ($)', 'n'],
+  ['ventas_vermut', 'Ventas de vermut y otros ($)', 'n'],
+  ['costo_laboral_real', 'Costo laboral real (vacío = igual a PERSONAL) ($)', 'n'],
+  ['saldo_mes_anterior', 'Saldo del mes anterior en efectivo y bancos ($)', 'n'],
+  ['saldo_mercado_pago', 'Saldo en Mercado Pago ($)', 'n'],
+  ['saldo_banco', 'Saldo en Banco Nación ($)', 'n'],
+  ['a_cobrar_tarjetas', 'A cobrar de tarjetas, aproximado ($)', 'n'],
+  ['saldo_banco_fin', 'Saldo en el banco al último día del mes ($)', 'n'],
+  ['fondo_inversion', 'Fondo de inversión ($)', 'n']
+];
+const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const EERR_PRIMER_MES = '2025-01';
+let EERR_ACTUAL = null; // { periodoMeses: [...], manualPorMes: {...} } del período que se está viendo
+
+function etiquetaMes(ym) { const [a, m] = ym.split('-'); return MESES_ES[Number(m) - 1] + ' ' + a; }
+function ultimoDiaDelMes(ym) { const [a, m] = ym.split('-').map(Number); return ym + '-' + String(new Date(a, m, 0).getDate()).padStart(2, '0'); }
+function fmtPesosEntero(n) {
+  const v = Math.round(Number(n) || 0);
+  return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('es-AR');
+}
+
+function llenarPeriodosEERR() {
+  const modo = document.getElementById('eerr-modo').value;
+  const sel = document.getElementById('eerr-periodo');
+  const hoy = new Date();
+  const actual = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+  const opciones = [];
+  if (modo === 'mes') {
+    let [a, m] = EERR_PRIMER_MES.split('-').map(Number);
+    while (a + '-' + String(m).padStart(2, '0') <= actual) { const ym = a + '-' + String(m).padStart(2, '0'); opciones.push([ym, etiquetaMes(ym)]); m++; if (m > 12) { m = 1; a++; } }
+    opciones.reverse();
+  } else {
+    for (let a = hoy.getFullYear(); a >= Number(EERR_PRIMER_MES.slice(0, 4)); a--) opciones.push([String(a), String(a)]);
+  }
+  sel.innerHTML = opciones.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  document.getElementById('eerr-label-periodo').textContent = modo === 'mes' ? 'Mes' : 'Año';
+  // por defecto: el último mes con datos de caja (no el que recién empieza)
+  if (modo === 'mes' && opciones.length > 1) sel.value = opciones[1][0];
+}
+
+async function datosPeriodoEERR(modo, valor) {
+  // devuelve { meses: [{caja, egr, manual, desperdicios}], clavesMeses: ['2026-09', ...] }
+  let desde, hasta;
+  if (modo === 'mes') { desde = valor + '-01'; hasta = ultimoDiaDelMes(valor); }
+  else { desde = valor + '-01-01'; hasta = valor + '-12-31'; }
+  const { data, error } = await sb.rpc('eerr_base', { p_desde: desde, p_hasta: hasta });
+  if (error) throw error;
+  const { data: manuales, error: errM } = await sb.from('eerr_manual').select('*').gte('mes', desde).lte('mes', hasta);
+  if (errM) throw errM;
+  const manualPorMes = {};
+  (manuales || []).forEach(m => { manualPorMes[m.mes.slice(0, 7)] = m; });
+  const porMes = {};
+  ((data && data.meses) || []).forEach(m => { porMes[m.mes] = m; });
+  const claves = modo === 'mes' ? [valor] : Object.keys(Object.assign({}, porMes, manualPorMes)).sort();
+  const meses = claves.map(ym => {
+    const b = porMes[ym] || { caja: {}, egresos: [], desperdicios: 0 };
+    const egr = {};
+    (b.egresos || []).forEach(x => { const k = GM_EERR.normKey(x.c) + '|' + x.f; egr[k] = (egr[k] || 0) + Number(x.t); });
+    const c = b.caja || {};
+    const man = {};
+    const mm = manualPorMes[ym];
+    if (mm) CAMPOS_EERR_MANUAL.forEach(([k]) => { if (mm[k] !== null && mm[k] !== undefined) man[k] = Number(mm[k]); });
+    return {
+      caja: { tc: c.tc, td: c.td, tr: c.tr, qp: c.qp, mp: c.mp, efe: c.efe, fiscal: c.fiscal != null ? c.fiscal : null },
+      egr, manual: man, desperdicios: b.desperdicios
+    };
+  });
+  return { meses, claves, manualPorMes };
+}
+
+function calcularPeriodoEERR(p) {
+  const base = p.meses.length === 1 ? p.meses[0] : GM_EERR.combinarMeses(p.meses);
+  if (p.meses.length > 1) { // para el anual la "fiscal" es la suma de las de cada mes
+    base.caja.fiscal = p.meses.reduce((a, m) => {
+      const c = m.caja;
+      return a + (c.fiscal != null ? Number(c.fiscal) : (Number(c.tc) || 0) + (Number(c.td) || 0) + (Number(c.tr) || 0) + (Number(c.qp) || 0));
+    }, 0);
+  }
+  return GM_EERR.calcular(base);
+}
+
+function pctTxt(p) { return p === null || p === undefined ? '' : (p * 100).toFixed(1).replace('.', ',') + '%'; }
+
+async function cargarEERR() {
+  const tabla = document.getElementById('eerr-tabla');
+  const resumen = document.getElementById('eerr-resumen');
+  tabla.innerHTML = 'Calculando...';
+  resumen.innerHTML = '';
+  document.getElementById('eerr-form').classList.add('oculto');
+  const modo = document.getElementById('eerr-modo').value;
+  const valor = document.getElementById('eerr-periodo').value;
+  document.getElementById('btn-eerr-datos').classList.toggle('oculto', modo !== 'mes');
+  try {
+    const actual = await datosPeriodoEERR(modo, valor);
+    EERR_ACTUAL = { modo, valor, actual };
+    if (!actual.meses.length || actual.meses.every(m => !Object.keys(m.egr).length && !m.caja.efe && !m.caja.tc)) {
+      tabla.innerHTML = '<div class="aviso">No hay datos cargados en este período.</div>';
+      return;
+    }
+    const r = calcularPeriodoEERR(actual);
+    let rPrev = null;
+    if (document.getElementById('eerr-comparar').checked) {
+      const valorPrev = modo === 'mes' ? (Number(valor.slice(0, 4)) - 1) + valor.slice(4) : String(Number(valor) - 1);
+      try {
+        const prev = await datosPeriodoEERR(modo, valorPrev);
+        if (prev.meses.some(m => Object.keys(m.egr).length || m.caja.efe || m.caja.tc)) rPrev = calcularPeriodoEERR(prev);
+      } catch (e) { rPrev = null; }
+    }
+    renderEERR(r, rPrev, modo, valor);
+  } catch (e) {
+    tabla.innerHTML = `<div class="estado-box estado-error">${e.message}</div>`;
+  }
+}
+
+function renderEERR(r, rPrev, modo, valor) {
+  const v = r.v, p = r.p;
+  const res = v.resultado, resF = v.res_final;
+  document.getElementById('eerr-resumen').innerHTML = `
+    <div class="card">
+      <div class="desglose-fila"><span>Venta total</span><span><b>${fmtPesosEntero(v.venta)}</b></span></div>
+      <div class="desglose-fila"><span>Costo de mercadería real</span><span>${pctTxt(p.real)} <span class="grupo-cant">(objetivo 36%)</span></span></div>
+      <div class="desglose-fila total"><span>Resultado</span><span class="${res < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(res)} · ${pctTxt(p.resultado)}</span></div>
+      <div class="desglose-fila"><span>Resultado final (después de pagos de deudas)</span><span class="${resF < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(resF)}</span></div>
+      <div class="desglose-fila"><span>Resultado en plata (sumando la deuda generada)</span><span class="${v.res_plata < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(v.res_plata)}</span></div>
+    </div>`;
+  const prevPorKey = {};
+  if (rPrev) rPrev.lineas.forEach(l => { if (l.key) prevPorKey[l.key] = l; });
+  let html = '<table class="tabla-eerr"><thead><tr><th>Concepto</th><th>$</th><th>%</th>' + (rPrev ? '<th>Año ant. %</th>' : '') + '</tr></thead><tbody>';
+  r.lineas.forEach(l => {
+    if (l.tipo === 'titulo') { html += `<tr class="eerr-titulo"><td colspan="${rPrev ? 4 : 3}">${l.label}</td></tr>`; return; }
+    const prev = l.key ? prevPorKey[l.key] : null;
+    let clasePct = '';
+    if (l.objetivo !== null && l.pct !== null) {
+      const malo = (l.key === 'resultado') ? (l.pct < l.objetivo) : (l.pct > l.objetivo);
+      clasePct = malo ? 'bajo-minimo' : 'eerr-ok';
+    }
+    const valor = l.formato === 'pct' ? '' : fmtPesosEntero(l.valor);
+    html += `<tr class="eerr-${l.tipo}">
+      <td>${l.label}${l.nota ? `<div class="eerr-nota">${l.nota}</div>` : ''}${l.objetivo !== null ? `<div class="eerr-nota">objetivo ${pctTxt(l.objetivo)}</div>` : ''}</td>
+      <td class="num">${valor}</td>
+      <td class="num ${clasePct}">${pctTxt(l.pct)}</td>
+      ${rPrev ? `<td class="num eerr-prev">${prev && prev.pct !== null ? pctTxt(prev.pct) : ''}</td>` : ''}
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('eerr-tabla').innerHTML = html;
+}
+
+document.getElementById('btn-nav-eerr').onclick = async () => {
+  llenarPeriodosEERR();
+  mostrarPantalla('eerr');
+  await cargarEERR();
+};
+document.getElementById('btn-volver-eerr').onclick = () => irAHome();
+document.getElementById('eerr-modo').onchange = () => { llenarPeriodosEERR(); cargarEERR(); };
+document.getElementById('eerr-periodo').onchange = () => cargarEERR();
+document.getElementById('eerr-comparar').onchange = () => cargarEERR();
+
+// Datos manuales del mes
+document.getElementById('btn-eerr-datos').onclick = () => {
+  if (!EERR_ACTUAL || EERR_ACTUAL.modo !== 'mes') return;
+  const ym = EERR_ACTUAL.valor;
+  const mm = EERR_ACTUAL.actual.manualPorMes[ym] || {};
+  document.getElementById('eerr-form-titulo').textContent = 'Datos de ' + etiquetaMes(ym);
+  document.getElementById('eerr-form-campos').innerHTML = CAMPOS_EERR_MANUAL.map(([k, texto, tipo]) => {
+    let val = mm[k];
+    if (val !== null && val !== undefined && tipo === 'pct') val = (Number(val) * 100).toFixed(2);
+    return `<label>${texto}</label><input type="number" step="0.01" class="eerr-in" data-campo="${k}" data-tipo="${tipo}" value="${val !== null && val !== undefined ? val : ''}">`;
+  }).join('');
+  document.getElementById('eerr-form-resultado').innerHTML = '';
+  document.getElementById('eerr-form').classList.remove('oculto');
+  document.getElementById('eerr-form').scrollIntoView({ behavior: 'smooth' });
+};
+document.getElementById('btn-eerr-cancelar').onclick = () => document.getElementById('eerr-form').classList.add('oculto');
+document.getElementById('btn-eerr-guardar').onclick = async () => {
+  const ym = EERR_ACTUAL.valor;
+  const fila = { mes: ym + '-01', actualizado_por: USUARIO_ACTUAL.id, actualizado_en: new Date().toISOString() };
+  document.querySelectorAll('.eerr-in').forEach(inp => {
+    if (inp.value === '') { fila[inp.dataset.campo] = null; return; }
+    let n = Number(inp.value);
+    if (inp.dataset.tipo === 'pct') n = n / 100;
+    fila[inp.dataset.campo] = n;
+  });
+  const { error } = await sb.from('eerr_manual').upsert(fila, { onConflict: 'mes' });
+  const res = document.getElementById('eerr-form-resultado');
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+  document.getElementById('eerr-form').classList.add('oculto');
+  await cargarEERR();
 };
 
 // ---------- Calendario de pagos a proveedores (admin) ----------
