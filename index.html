@@ -528,7 +528,7 @@
   <!-- PANTALLA: ASISTENTE IA (admin y encargado, solo lectura) -->
   <div id="pantalla-asistente" class="oculto">
     <h2 class="section-title" style="margin-top:0">Asistente IA</h2>
-    <div class="aviso">Preguntale por stock, pedidos, ventas por día, recetas y márgenes. Solo mira los datos, no cambia nada.</div>
+    <div class="aviso">Si no sabés cómo cargar o encontrar algo en la app, preguntale y te explica paso a paso.<span id="asistente-datos-aviso"> También podés consultarle por stock, pedidos, ventas por día, recetas y márgenes. Solo mira los datos, no cambia nada.</span></div>
     <div id="asistente-chat" style="margin:10px 0"></div>
     <div id="asistente-sugerencias" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
     <textarea id="asistente-input" rows="2" placeholder="Escribí tu pregunta..." style="width:100%;box-sizing:border-box"></textarea>
@@ -843,7 +843,7 @@ function aplicarGatingPorRol() {
   document.getElementById('btn-nav-caja').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-ingresos').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-precios').classList.toggle('oculto', !soloAdminEncargado);
-  document.getElementById('btn-nav-asistente').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-asistente').classList.remove('oculto');
   document.getElementById('btn-nav-alertas').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-calendario').classList.toggle('oculto', rol !== 'admin');
   document.getElementById('btn-nav-eerr').classList.toggle('oculto', rol !== 'admin');
@@ -1552,26 +1552,62 @@ document.getElementById('btn-volver-pedidos').onclick = () => irAHome();
 // ---------- Asistente IA (solo lectura) ----------
 let ASISTENTE_MSGS = [];
 let ASISTENTE_OCUPADO = false;
-const ASISTENTE_SUGERENCIAS = [
+const ASISTENTE_SUGERENCIAS_DATOS = [
   '¿Qué tengo que pedir esta semana?',
   '¿Qué días vendemos más y menos?',
-  '¿Qué platos tienen poco margen?',
-  '¿Cómo vienen las ventas este mes vs el anterior?'
+  '¿Qué platos tienen poco margen?'
 ];
+const ASISTENTE_SUGERENCIAS_AYUDA = {
+  admin: ['¿Cómo cargo una factura?', '¿Cómo cambio el stock mínimo de un producto?'],
+  encargado: ['¿Cómo cargo una factura?', '¿Cómo cambio el stock mínimo de un producto?'],
+  cocina: ['¿Cómo cargo un desperdicio?', '¿Cómo corrijo el stock de un producto?', '¿Dónde veo qué hay que pedir?']
+};
+// Pantallas a las que el asistente puede mandar: clave -> [id del botón del inicio, texto]
+const ASISTENTE_IR = {
+  mercaderia: ['card-mercaderia', 'Registrar mercadería'], desperdicio: ['btn-nav-desperdicio', 'Desperdicio'],
+  stock: ['btn-nav-stock', 'Stock'], pedidos: ['btn-nav-pedidos', 'Pedidos'], recetas: ['btn-nav-recetas', 'Recetas'],
+  caja: ['btn-nav-caja', 'Caja diaria'], ingresos: ['btn-nav-ingresos', 'Ingresos/Egresos'],
+  precios: ['btn-nav-precios', 'Insumos y precios'], alertas: ['btn-nav-alertas', 'Alertas'],
+  eerr: ['btn-nav-eerr', 'Estado de resultados'], calendario: ['btn-nav-calendario', 'Calendario de pagos']
+};
 
 function escaparHtml(t) {
   return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function irDesdeAsistente(clave) {
+  const def = ASISTENTE_IR[clave];
+  if (!def) return;
+  irAHome();
+  const el = document.getElementById(def[0]);
+  if (!el || el.classList.contains('oculto')) return;
+  if (clave === 'mercaderia') el.scrollIntoView({ behavior: 'smooth' });
+  else el.click();
+}
+
 function renderAsistente() {
   const cont = document.getElementById('asistente-chat');
   cont.innerHTML = ASISTENTE_MSGS.map(m => {
-    const txt = escaparHtml(m.content).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
     const mio = m.role === 'user';
-    return `<div style="display:flex;justify-content:${mio ? 'flex-end' : 'flex-start'};margin:6px 0"><div style="max-width:88%;padding:9px 12px;border-radius:12px;line-height:1.45;font-size:14px;${mio ? 'background:var(--rojo, #b3262d);color:#fff' : 'background:#f2efe9;color:#222'}">${txt}</div></div>`;
-  }).join('') + (ASISTENTE_OCUPADO ? '<div class="aviso">Pensando y mirando los datos…</div>' : '');
+    const claves = [];
+    const limpio = mio ? m.content : m.content.replace(/\[\[ir:([a-z]+)\]\]/g, (_, k) => { if (ASISTENTE_IR[k] && !claves.includes(k)) claves.push(k); return ''; }).trim();
+    const txt = escaparHtml(limpio).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+    const botones = claves.filter(k => { const el = document.getElementById(ASISTENTE_IR[k][0]); return el && !el.classList.contains('oculto'); })
+      .map(k => `<button type="button" class="secundario asistente-ir" data-ir="${k}" style="width:auto;margin:8px 6px 0 0;padding:6px 12px;font-size:13px">Ir a ${ASISTENTE_IR[k][1]} →</button>`).join('');
+    return `<div style="display:flex;justify-content:${mio ? 'flex-end' : 'flex-start'};margin:6px 0"><div style="max-width:88%;padding:9px 12px;border-radius:12px;line-height:1.45;font-size:14px;${mio ? 'background:var(--rojo, #b3262d);color:#fff' : 'background:#f2efe9;color:#222'}">${txt}${botones ? '<div>' + botones + '</div>' : ''}</div></div>`;
+  }).join('') + (ASISTENTE_OCUPADO ? '<div class="aviso">Pensando…</div>' : '');
+  cont.querySelectorAll('.asistente-ir').forEach(b => { b.onclick = () => irDesdeAsistente(b.dataset.ir); });
   document.getElementById('asistente-sugerencias').classList.toggle('oculto', ASISTENTE_MSGS.length > 0);
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+
+function armarSugerenciasAsistente() {
+  const rol = USUARIO_ACTUAL ? USUARIO_ACTUAL.rol : 'cocina';
+  const lista = (rol === 'cocina' ? [] : ASISTENTE_SUGERENCIAS_DATOS).concat(ASISTENTE_SUGERENCIAS_AYUDA[rol] || ASISTENTE_SUGERENCIAS_AYUDA.cocina);
+  const cont = document.getElementById('asistente-sugerencias');
+  cont.innerHTML = lista.map(s => `<button type="button" class="secundario" style="width:auto;margin:0;padding:6px 10px;font-size:13px">${s}</button>`).join('');
+  cont.querySelectorAll('button').forEach(b => { b.onclick = () => preguntarAsistente(b.textContent); });
+  document.getElementById('asistente-datos-aviso').classList.toggle('oculto', rol === 'cocina');
 }
 
 async function preguntarAsistente(texto) {
@@ -1584,11 +1620,14 @@ async function preguntarAsistente(texto) {
   renderAsistente();
   try {
     const token = await tokenSesion();
-    const resp = await fetch('/api/agente', {
+    const pedir = () => fetch('/api/agente', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ mensajes: ASISTENTE_MSGS })
     });
+    let resp;
+    try { resp = await pedir(); }
+    catch (e) { resp = await pedir(); } // un reintento si se cortó la conexión
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(data.error || 'No pude consultar al asistente.');
     ASISTENTE_MSGS.push({ role: 'assistant', content: data.respuesta });
@@ -1600,10 +1639,7 @@ async function preguntarAsistente(texto) {
   renderAsistente();
 }
 
-document.getElementById('asistente-sugerencias').innerHTML = ASISTENTE_SUGERENCIAS
-  .map(s => `<button type="button" class="secundario" style="width:auto;margin:0;padding:6px 10px;font-size:13px">${s}</button>`).join('');
-document.querySelectorAll('#asistente-sugerencias button').forEach(b => { b.onclick = () => preguntarAsistente(b.textContent); });
-document.getElementById('btn-nav-asistente').onclick = () => { mostrarPantalla('asistente'); renderAsistente(); };
+document.getElementById('btn-nav-asistente').onclick = () => { armarSugerenciasAsistente(); mostrarPantalla('asistente'); renderAsistente(); };
 document.getElementById('btn-asistente-enviar').onclick = () => preguntarAsistente(document.getElementById('asistente-input').value);
 document.getElementById('asistente-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); preguntarAsistente(e.target.value); }
