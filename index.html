@@ -628,6 +628,14 @@
     </div>
   </div>
 
+  <!-- PANTALLA: RECETAS (solo lectura, para cocina: sin costos ni precios) -->
+  <div id="pantalla-recetas-ver" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Recetas</h2>
+    <input type="text" id="recetas-ver-buscador" placeholder="Buscar receta o ingrediente...">
+    <div id="recetas-ver-lista"></div>
+    <button class="secundario" id="btn-volver-recetas-ver">Volver</button>
+  </div>
+
   <!-- PANTALLA: ESTADO DE RESULTADOS (admin) -->
   <div id="pantalla-eerr" class="oculto">
     <h2 class="section-title" style="margin-top:0">Estado de resultados</h2>
@@ -881,7 +889,7 @@ function categoriasDisponibles() {
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','ventas','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','ventas','recetas-ver','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
@@ -932,7 +940,7 @@ function aplicarGatingPorRol() {
   const rol = USUARIO_ACTUAL ? USUARIO_ACTUAL.rol : null;
   const soloAdminEncargado = ['admin', 'encargado'].includes(rol);
   document.getElementById('card-mercaderia').classList.toggle('oculto', !soloAdminEncargado);
-  document.getElementById('btn-nav-recetas').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-recetas').classList.remove('oculto');
   document.getElementById('btn-nav-caja').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-ingresos').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-precios').classList.toggle('oculto', !soloAdminEncargado);
@@ -1642,6 +1650,39 @@ document.getElementById('btn-nav-pedidos').onclick = async () => {
 };
 document.getElementById('btn-volver-pedidos').onclick = () => irAHome();
 
+// ---------- Recetas para cocina (solo lectura, sin costos) ----------
+let RECETAS_VER = [];
+function renderRecetasVer(filtro) {
+  const cont = document.getElementById('recetas-ver-lista');
+  const q = normalizarTexto((filtro || '').trim());
+  const lista = RECETAS_VER.filter(r => { const base = normalizarTexto(r.nombre + ' ' + (r.ingredientes || []).map(i => i.nombre).join(' ')); return !q || q.split(' ').filter(Boolean).every(p => base.indexOf(p) >= 0); });
+  if (!lista.length) { cont.innerHTML = '<div class="aviso">No hay recetas que coincidan.</div>'; return; }
+  const grupos = {};
+  lista.forEach(r => { const g = r.tipo === 'preparacion' ? 'Preparaciones' : (r.categoria || 'Otras'); (grupos[g] = grupos[g] || []).push(r); });
+  cont.innerHTML = Object.keys(grupos).sort((a, b) => (a === 'Preparaciones') - (b === 'Preparaciones') || a.localeCompare(b)).map(g => {
+    const items = grupos[g].map(r => {
+      const ings = (r.ingredientes || []).map(i => {
+        const cant = i.medida === 'unidad' ? `${Number(i.cantidad)} u` : `${Number(i.cantidad)} g/ml`;
+        return `<div class="lista-item"><div class="nombre">${escaparHtml(i.nombre)}${i.marca ? ` <span class="sub">${escaparHtml(i.marca)}</span>` : ''}</div><div class="sub" style="white-space:nowrap">${cant}</div></div>`;
+      }).join('') || '<div class="sub">Sin ingredientes cargados.</div>';
+      const prep = r.preparacion ? `<div class="nombre" style="margin-top:8px">Preparación</div><div style="white-space:pre-wrap;font-size:14px">${escaparHtml(r.preparacion)}</div>` : '';
+      return `<details style="margin:4px 0"><summary style="padding:8px 4px;font-weight:600">${escaparHtml(r.nombre)}</summary><div style="padding:0 6px 10px">${ings}${prep}</div></details>`;
+    }).join('');
+    return `<details class="grupo-stock"${q ? ' open' : ''}><summary><span>${escaparHtml(g)} <span class="grupo-cant">(${grupos[g].length})</span></span></summary><div class="grupo-stock-body">${items}</div></details>`;
+  }).join('');
+}
+async function abrirRecetasVer() {
+  document.getElementById('recetas-ver-buscador').value = '';
+  document.getElementById('recetas-ver-lista').innerHTML = 'Cargando...';
+  mostrarPantalla('recetas-ver');
+  const { data, error } = await sb.rpc('recetas_para_cocina');
+  if (error) { document.getElementById('recetas-ver-lista').innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
+  RECETAS_VER = data || [];
+  renderRecetasVer('');
+}
+document.getElementById('recetas-ver-buscador').addEventListener('input', (e) => renderRecetasVer(e.target.value));
+document.getElementById('btn-volver-recetas-ver').onclick = () => irAHome();
+
 // ---------- Ventas Postberry (subida de Excel + análisis) ----------
 const fmtPesos = (n) => { const v = Math.round(Number(n) || 0); return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('es-AR'); };
 const fmtDiaCorto = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}`; };
@@ -2296,6 +2337,7 @@ function renderPrecios(filtro) {
 }
 
 document.getElementById('btn-nav-recetas').onclick = async () => {
+  if (USUARIO_ACTUAL && USUARIO_ACTUAL.rol === 'cocina') { await abrirRecetasVer(); return; }
   await cargarInsumos();
   await cargarListaRecetas();
   document.getElementById('receta-form').classList.add('oculto');

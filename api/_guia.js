@@ -7,7 +7,7 @@ export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'r
 export const GUIA = `GUÍA DE LA APP (lo único que existe; no inventes pantallas ni botones que no estén acá)
 
 Entrada: se entra con usuario y contraseña (cada persona tiene la suya). Arriba a la izquierda está "🔓 Salir" y arriba a la derecha "⚙️" (ajustes). Después del ingreso se ve la pantalla de inicio con botones. Cada pantalla tiene un botón "Volver" abajo.
-Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Desperdicio, Stock y Pedidos.
+Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Recetas (solo para mirar, sin precios), Desperdicio, Stock y Pedidos.
 
 1) REGISTRAR MERCADERÍA (admin y encargado) — [[ir:mercaderia]]
 Está en el inicio, en la tarjeta "Registrar mercadería". Sirve para cargar una factura o remito de un proveedor sacándole una foto.
@@ -27,8 +27,9 @@ Admin y encargado además ven el botón ⚙ en cada producto: ahí se carga el s
 4) PEDIDOS (todos) — [[ir:pedidos]]
 Muestra lo que hay que pedir, o sea los productos que están en el mínimo o por debajo. Está ordenado por stock (fiambres, quesos, vermut, limpieza, descartables, panes...) y dentro de cada uno por proveedor, con los días de pedido. Cada proveedor tiene "Copiar pedido" y "Mandar por WhatsApp" para armar el mensaje del pedido. El botón Pedidos del inicio muestra un numerito rojo con la cantidad de productos a pedir. Cuando llega la mercadería hay que actualizar el stock (en Stock, o cargando la factura si se es admin/encargado).
 
-5) RECETAS (admin y encargado) — [[ir:recetas]]
-Lista de platos y preparaciones con su costo. "+ Nueva receta": nombre del producto, categoría en la carta, preparación (opcional), margen objetivo, merma, insumos de la receta (con "+ Agregar insumo" y la cantidad de cada uno) y el precio en la carta. Se guarda con "Guardar receta". El costo se calcula solo con los precios de los insumos.
+5) RECETAS (todos; admin y encargado las editan, cocina solo las mira) — [[ir:recetas]]
+Cocina ve la lista de recetas agrupada por categoría, con un buscador (por nombre de receta o ingrediente). Al tocar una receta se ven los ingredientes con la cantidad de cada uno y la preparación paso a paso. No muestra costos ni precios y no se puede modificar nada.
+Para admin y encargado: lista de platos y preparaciones con su costo. "+ Nueva receta": nombre del producto, categoría en la carta, preparación (opcional), margen objetivo, merma, insumos de la receta (con "+ Agregar insumo" y la cantidad de cada uno) y el precio en la carta. Se guarda con "Guardar receta". El costo se calcula solo con los precios de los insumos.
 
 6) CAJA DIARIA (admin y encargado) — [[ir:caja]]
 Cierre de caja del día: elegir la fecha y cargar lo cobrado en Tarjeta crédito, Tarjeta débito, Transferencia, QR Posnet, QR Mercado Pago y Efectivo. El total se suma solo. "Guardar cierre". Si ya había un cierre para esa fecha, lo reemplaza.
