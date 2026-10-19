@@ -628,10 +628,28 @@
     </div>
   </div>
 
-  <!-- PANTALLA: RECETAS (solo lectura, para cocina: sin costos ni precios) -->
+  <!-- PANTALLA: RECETAS para cocina (sin costos ni precios; pueden crear y modificar las suyas) -->
   <div id="pantalla-recetas-ver" class="oculto">
     <h2 class="section-title" style="margin-top:0">Recetas</h2>
     <input type="text" id="recetas-ver-buscador" placeholder="Buscar receta o ingrediente...">
+    <button class="agregar-producto oculto" id="btn-receta-cocina-nueva">+ Nueva receta</button>
+    <div id="receta-cocina-form" class="card oculto">
+      <h3 id="rc-titulo" style="margin:0 0 6px">Nueva receta</h3>
+      <label style="margin-top:0">Nombre</label>
+      <input type="text" id="rc-nombre" placeholder="Ej: Sandwich de bondiola y queso">
+      <label>Categoría</label>
+      <select id="rc-categoria"></select>
+      <label>Ingredientes</label>
+      <div id="rc-ingredientes"></div>
+      <button class="agregar-producto" id="btn-rc-agregar" type="button">+ Agregar ingrediente</button>
+      <label>Preparación</label>
+      <textarea id="rc-preparacion" placeholder="Paso a paso (opcional)"></textarea>
+      <div class="aviso">El costo y el precio de carta los carga el administrador.</div>
+      <div class="aviso" id="rc-error" style="color:#b3262d"></div>
+      <button class="big" id="btn-rc-guardar" type="button">Guardar receta</button>
+      <button class="secundario" id="btn-rc-cancelar" type="button">Cancelar</button>
+    </div>
+    <datalist id="dl-insumos-cocina"></datalist>
     <div id="recetas-ver-lista"></div>
     <button class="secundario" id="btn-volver-recetas-ver">Volver</button>
   </div>
@@ -1650,8 +1668,14 @@ document.getElementById('btn-nav-pedidos').onclick = async () => {
 };
 document.getElementById('btn-volver-pedidos').onclick = () => irAHome();
 
-// ---------- Recetas para cocina (solo lectura, sin costos) ----------
+// ---------- Recetas para cocina (sin costos ni precios; pueden crear y modificar las suyas) ----------
 let RECETAS_VER = [];
+let INSUMOS_COCINA = [];
+let RC_EDIT_ID = null;
+let RC_ING = []; // { texto, insumo_id, cantidad, medida }
+const CATS_RECETA_COCINA = ['Sandwiches', 'Picadas y platitos', 'Conservas', 'Conito de picada', 'Kutsi', 'Sandwiches de Focaccia entera', 'Fuera de carta'];
+const etiquetaInsCocina = (i) => (i.marca ? i.marca + ' ' : '') + i.nombre;
+
 function renderRecetasVer(filtro) {
   const cont = document.getElementById('recetas-ver-lista');
   const q = normalizarTexto((filtro || '').trim());
@@ -1666,20 +1690,98 @@ function renderRecetasVer(filtro) {
         return `<div class="lista-item"><div class="nombre">${escaparHtml(i.nombre)}${i.marca ? ` <span class="sub">${escaparHtml(i.marca)}</span>` : ''}</div><div class="sub" style="white-space:nowrap">${cant}</div></div>`;
       }).join('') || '<div class="sub">Sin ingredientes cargados.</div>';
       const prep = r.preparacion ? `<div class="nombre" style="margin-top:8px">Preparación</div><div style="white-space:pre-wrap;font-size:14px">${escaparHtml(r.preparacion)}</div>` : '';
-      return `<details style="margin:4px 0"><summary style="padding:8px 4px;font-weight:600">${escaparHtml(r.nombre)}</summary><div style="padding:0 6px 10px">${ings}${prep}</div></details>`;
+      const editar = r.editable ? `<button type="button" class="secundario btn-rc-editar" data-id="${r.id}" style="width:auto;margin:10px 0 0;padding:8px 14px">Editar</button>` : '';
+      const marca = r.creada_por_cocina ? ' <span class="sub">🆕 creada por cocina</span>' : '';
+      return `<details style="margin:4px 0"><summary style="padding:8px 4px;font-weight:600">${escaparHtml(r.nombre)}${marca}</summary><div style="padding:0 6px 10px">${ings}${prep}${editar}</div></details>`;
     }).join('');
     return `<details class="grupo-stock"${q ? ' open' : ''}><summary><span>${escaparHtml(g)} <span class="grupo-cant">(${grupos[g].length})</span></span></summary><div class="grupo-stock-body">${items}</div></details>`;
   }).join('');
+  cont.querySelectorAll('.btn-rc-editar').forEach(b => { b.onclick = () => abrirFormRecetaCocina(RECETAS_VER.find(r => r.id === b.dataset.id)); });
 }
-async function abrirRecetasVer() {
-  document.getElementById('recetas-ver-buscador').value = '';
-  document.getElementById('recetas-ver-lista').innerHTML = 'Cargando...';
-  mostrarPantalla('recetas-ver');
+
+async function cargarRecetasVer() {
   const { data, error } = await sb.rpc('recetas_para_cocina');
   if (error) { document.getElementById('recetas-ver-lista').innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
   RECETAS_VER = data || [];
-  renderRecetasVer('');
+  renderRecetasVer(document.getElementById('recetas-ver-buscador').value);
 }
+
+async function abrirRecetasVer() {
+  document.getElementById('recetas-ver-buscador').value = '';
+  document.getElementById('recetas-ver-lista').innerHTML = 'Cargando...';
+  document.getElementById('receta-cocina-form').classList.add('oculto');
+  document.getElementById('btn-receta-cocina-nueva').classList.toggle('oculto', !USUARIO_ACTUAL || USUARIO_ACTUAL.rol !== 'cocina');
+  mostrarPantalla('recetas-ver');
+  await cargarRecetasVer();
+}
+
+function renderIngredientesCocina() {
+  const cont = document.getElementById('rc-ingredientes');
+  cont.innerHTML = RC_ING.map((r, idx) => `<div class="card" style="padding:8px;margin:6px 0">
+      <input type="text" class="rc-ing-texto" data-idx="${idx}" list="dl-insumos-cocina" placeholder="Buscar ingrediente..." value="${escaparHtml(r.texto || '')}">
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input type="number" step="any" min="0" class="rc-ing-cant" data-idx="${idx}" placeholder="Cantidad" value="${r.cantidad ?? ''}" style="flex:1">
+        <select class="rc-ing-medida" data-idx="${idx}" style="flex:1"><option value="gramos"${r.medida === 'unidad' ? '' : ' selected'}>Gramos / ml</option><option value="unidad"${r.medida === 'unidad' ? ' selected' : ''}>Unidades</option></select>
+        <button type="button" class="secundario rc-ing-quitar" data-idx="${idx}" style="width:auto;margin:0;padding:6px 12px" aria-label="Quitar">✕</button>
+      </div></div>`).join('');
+  cont.querySelectorAll('.rc-ing-texto').forEach(el => el.addEventListener('input', () => {
+    const r = RC_ING[el.dataset.idx];
+    r.texto = el.value;
+    const m = INSUMOS_COCINA.find(i => etiquetaInsCocina(i).toLowerCase() === el.value.trim().toLowerCase());
+    r.insumo_id = m ? m.id : null;
+  }));
+  cont.querySelectorAll('.rc-ing-cant').forEach(el => el.addEventListener('input', () => { RC_ING[el.dataset.idx].cantidad = el.value === '' ? null : Number(el.value); }));
+  cont.querySelectorAll('.rc-ing-medida').forEach(el => el.addEventListener('change', () => { RC_ING[el.dataset.idx].medida = el.value; }));
+  cont.querySelectorAll('.rc-ing-quitar').forEach(el => el.onclick = () => { RC_ING.splice(Number(el.dataset.idx), 1); renderIngredientesCocina(); });
+}
+
+async function abrirFormRecetaCocina(receta) {
+  if (!INSUMOS_COCINA.length) {
+    const { data, error } = await sb.rpc('insumos_para_cocina');
+    if (error) { alert('No pude cargar los ingredientes: ' + error.message); return; }
+    INSUMOS_COCINA = data || [];
+    document.getElementById('dl-insumos-cocina').innerHTML = INSUMOS_COCINA.map(i => `<option value="${escaparHtml(etiquetaInsCocina(i))}"></option>`).join('');
+  }
+  RC_EDIT_ID = receta ? receta.id : null;
+  document.getElementById('rc-titulo').textContent = receta ? 'Modificar receta' : 'Nueva receta';
+  document.getElementById('rc-nombre').value = receta ? receta.nombre : '';
+  document.getElementById('rc-categoria').innerHTML = CATS_RECETA_COCINA.map(c => `<option${receta && receta.categoria === c ? ' selected' : ''}>${c}</option>`).join('');
+  document.getElementById('rc-preparacion').value = receta && receta.preparacion ? receta.preparacion : '';
+  RC_ING = receta ? (receta.ingredientes || []).map(i => ({ texto: etiquetaInsCocina(i), insumo_id: i.insumo_id, cantidad: Number(i.cantidad), medida: i.medida })) : [{ texto: '', insumo_id: null, cantidad: null, medida: 'gramos' }];
+  document.getElementById('rc-error').textContent = '';
+  renderIngredientesCocina();
+  const f = document.getElementById('receta-cocina-form');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('btn-receta-cocina-nueva').onclick = () => abrirFormRecetaCocina(null);
+document.getElementById('btn-rc-agregar').onclick = () => { RC_ING.push({ texto: '', insumo_id: null, cantidad: null, medida: 'gramos' }); renderIngredientesCocina(); };
+document.getElementById('btn-rc-cancelar').onclick = () => document.getElementById('receta-cocina-form').classList.add('oculto');
+document.getElementById('btn-rc-guardar').onclick = async () => {
+  const err = document.getElementById('rc-error');
+  err.textContent = '';
+  const nombre = document.getElementById('rc-nombre').value.trim();
+  if (!nombre) { err.textContent = 'Falta el nombre de la receta.'; return; }
+  const filas = RC_ING.filter(r => r.texto.trim() || r.cantidad);
+  if (!filas.length) { err.textContent = 'Agregá al menos un ingrediente.'; return; }
+  for (const r of filas) {
+    if (!r.insumo_id) { err.textContent = `No encuentro el ingrediente "${r.texto}". Elegilo de la lista que aparece al escribir.`; return; }
+    if (!(r.cantidad > 0)) { err.textContent = `Falta la cantidad de "${r.texto}".`; return; }
+  }
+  const btn = document.getElementById('btn-rc-guardar');
+  btn.disabled = true;
+  const { error } = await sb.rpc('guardar_receta_cocina', {
+    p_receta_id: RC_EDIT_ID, p_nombre: nombre, p_categoria: document.getElementById('rc-categoria').value,
+    p_preparacion: document.getElementById('rc-preparacion').value,
+    p_ingredientes: filas.map(r => ({ insumo_id: r.insumo_id, cantidad: r.cantidad, medida: r.medida }))
+  });
+  btn.disabled = false;
+  if (error) { err.textContent = error.message; return; }
+  document.getElementById('receta-cocina-form').classList.add('oculto');
+  await cargarRecetasVer();
+};
+
 document.getElementById('recetas-ver-buscador').addEventListener('input', (e) => renderRecetasVer(e.target.value));
 document.getElementById('btn-volver-recetas-ver').onclick = () => irAHome();
 
@@ -2402,7 +2504,7 @@ async function cargarListaRecetas() {
       const pill = m === null ? '' : `<span class="pill-margen ${m < MARGEN_OBJETIVO_COMIDA ? 'bajo' : 'ok'}">${(m * 100).toFixed(1)}%</span>`;
       const sub = esPrep
         ? `costo por kg ${formatoPesos(preciosPrep[r.insumo_id])}`
-        : `costo ${formatoPesos(r.costo_total_calculado)} · carta ${formatoPesos(r.precio_venta_sugerido)}`;
+        : `costo ${formatoPesos(r.costo_total_calculado)} · carta ${formatoPesos(r.precio_venta_sugerido)}${r.creada_por_cocina ? ' · 🆕 creada por cocina (falta revisar y cargar el precio)' : ''}`;
       return `
       <div class="lista-item">
         <div>
@@ -2690,7 +2792,7 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
   const campos = {
     nombre_producto: nombre, categoria_carta: categoria, preparacion,
     tipo: esPrep ? 'preparacion' : 'plato', merma_pct: mermaPct,
-    margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido
+    margen_objetivo: margen, costo_total_calculado: costoTotal, precio_venta_sugerido: precioSugerido, creada_por_cocina: false
   };
 
   let recetaId = id;
