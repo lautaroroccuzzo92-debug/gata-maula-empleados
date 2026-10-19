@@ -1236,6 +1236,10 @@ function mostrarResultado(data) {
       const detalle = data.lineas_sin_stock.map(l => `${l.nombre || '(sin nombre)'} — ${l.categoria}`).join('<br>');
       bloque('Líneas sin seguimiento de stock', true, `Estas categorías no generan insumo/stock, solo quedan en Ingresos/Egresos:<br>${detalle}`);
     }
+    if (data.sin_minimo && data.sin_minimo.length) {
+      const detalle = data.sin_minimo.map(l => l.nombre).join('<br>');
+      bloque('Productos sin mínimo de stock', false, `Para que entren en Pedidos, cargales el mínimo en <b>Stock → Sin mínimo cargado</b> (botón ⚙):<br>${detalle}`);
+    }
     bloque('Ingresos/Egresos', true, 'Movimiento de la factura registrado.');
   }
 
@@ -1354,10 +1358,10 @@ document.getElementById('btn-guardar-desperdicio').onclick = async () => {
 
 // ---------- Stock (lectura, con buscador y agrupado por categoría) ----------
 let STOCK_DATA = [];
-const ORDEN_SUBCATEGORIAS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'kutsi', 'cocina', 'panes', 'descartables'];
+const ORDEN_SUBCATEGORIAS = ['vermut', 'cerveza y sin alcohol', 'fiambres', 'quesos', 'kutsi', 'cocina', 'panes', 'limpieza', 'descartables'];
 const ETIQUETA_SUBCATEGORIA = {
   'vermut': 'Vermut', 'cerveza y sin alcohol': 'Cerveza y sin alcohol', 'fiambres': 'Fiambres',
-  'quesos': 'Quesos', 'kutsi': 'Kutsi', 'panes': 'Panes', 'descartables': 'Packaging', 'cocina': 'Cocina'
+  'quesos': 'Quesos', 'kutsi': 'Kutsi', 'panes': 'Panes', 'descartables': 'Descartables', 'cocina': 'Cocina', 'limpieza': 'Limpieza'
 };
 
 document.getElementById('btn-nav-stock').onclick = async () => {
@@ -1402,7 +1406,14 @@ function renderStockLista(filtro) {
   const ordenFinal = ORDEN_SUBCATEGORIAS.filter(s => grupos[s]).concat(Object.keys(grupos).filter(s => !ORDEN_SUBCATEGORIAS.includes(s)));
 
   const hayFiltro = !!texto;
-  cont.innerHTML = ordenFinal.map(sub => {
+  const puedeCfg = USUARIO_ACTUAL && ['admin', 'encargado'].includes(USUARIO_ACTUAL.rol);
+  const sinMin = filtrado.filter(s => !(Number(s.stock_minimo) > 0)).sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
+  const bloqueSinMin = (puedeCfg && sinMin.length) ? `<details class="grupo-stock"${sinMin.length <= 15 || hayFiltro ? ' open' : ''}>
+      <summary><span>Sin mínimo cargado <span class="grupo-cant">(${sinMin.length}) · tocá ⚙ para cargarlo</span></span></summary>
+      <div class="grupo-stock-body">${sinMin.map(s => `<div class="lista-item"><div><div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div><div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}${ETIQUETA_SUBCATEGORIA[s.insumos?.subcategoria] || s.insumos?.subcategoria || ''}</div></div>
+        <button type="button" class="secundario btn-config-pedido" data-id="${s.insumo_id}" title="Mínimo y datos de pedido" style="width:auto;padding:6px 10px;margin:0">⚙</button></div>`).join('')}</div>
+    </details>` : '';
+  cont.innerHTML = bloqueSinMin + ordenFinal.map(sub => {
     const items = grupos[sub].sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
     const filas = items.map(s => {
       const bajo = estaBajoMinimo(s);
@@ -1737,16 +1748,16 @@ async function cargarAlertas() {
 
 // ---------- Precios de insumos (carga manual por lista de precios) ----------
 // Categorías de la hoja Costos Variables (el orden es el de la pantalla).
-const ORDEN_SUBCATEGORIAS_PRECIOS = ['fiambres', 'quesos', 'kutsi', 'cocina', 'vermut', 'cerveza y sin alcohol', 'panes', 'descartables', 'preparaciones'];
+const ORDEN_SUBCATEGORIAS_PRECIOS = ['fiambres', 'quesos', 'kutsi', 'cocina', 'vermut', 'cerveza y sin alcohol', 'panes', 'descartables', 'limpieza', 'preparaciones'];
 const ETIQUETA_INSUMOS = {
   'fiambres': 'Fiambres', 'quesos': 'Quesos', 'kutsi': 'Kutsi', 'vermut': 'Vermut',
   'cerveza y sin alcohol': 'Cerveza y sin alcohol', 'panes': 'Panes',
-  'descartables': 'Packaging', 'cocina': 'Cocina', 'preparaciones': 'Preparaciones'
+  'descartables': 'Descartables', 'limpieza': 'Limpieza', 'cocina': 'Cocina', 'preparaciones': 'Preparaciones'
 };
 // Categorías en las que se puede crear un insumo nuevo, y en qué se mide por defecto.
 const CATEGORIAS_NUEVO_INSUMO = [
   ['fiambres', 'kg'], ['quesos', 'kg'], ['kutsi', 'kg'], ['cocina', 'kg'], ['vermut', 'unidad'],
-  ['cerveza y sin alcohol', 'unidad'], ['panes', 'unidad'], ['descartables', 'unidad']
+  ['cerveza y sin alcohol', 'unidad'], ['panes', 'unidad'], ['descartables', 'unidad'], ['limpieza', 'unidad']
 ];
 
 document.getElementById('btn-nav-precios').onclick = async () => {
