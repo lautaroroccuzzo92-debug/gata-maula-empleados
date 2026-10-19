@@ -1538,39 +1538,53 @@ async function cargarPedidos() {
   cont.innerHTML = 'Cargando...';
   try {
     const filas = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,unidad,dias_pedido,proveedor_pedido,cantidad_pedido,insumos(nombre,marca,subcategoria)').order('insumo_id'));
-    const bajos = filas.filter(estaBajoMinimo);
-    const sinMinimo = filas.filter(s => !(Number(s.stock_minimo) > 0)).length;
-    const avisoSin = `<div class="aviso">${sinMinimo} insumos todavía no tienen un mínimo cargado (se carga desde Stock, con el botón ⚙).</div>`;
-    if (!bajos.length) {
-      cont.innerHTML = '<div class="aviso">No hay nada para pedir: todo está por encima del mínimo. 👍</div>' + avisoSin;
-      return;
-    }
-    const grupos = {};
-    bajos.forEach(s => { const p = s.proveedor_pedido || 'Sin proveedor asignado'; (grupos[p] = grupos[p] || []).push(s); });
-    const nombres = Object.keys(grupos).sort((a, b) => (a.startsWith('Sin ') ? 1 : 0) - (b.startsWith('Sin ') ? 1 : 0) || a.localeCompare(b));
+    const porCategoria = {};
+    filas.forEach(s => { const c = s.insumos?.subcategoria || 'otros'; (porCategoria[c] = porCategoria[c] || []).push(s); });
+    const categorias = ORDEN_SUBCATEGORIAS.filter(c => porCategoria[c]).concat(Object.keys(porCategoria).filter(c => !ORDEN_SUBCATEGORIAS.includes(c)));
     PEDIDOS_TEXTOS = {};
-    cont.innerHTML = nombres.map((p, i) => {
-      const items = grupos[p].sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
-      const dias = [...new Set(items.map(s => s.dias_pedido).filter(Boolean))].join(' · ');
-      PEDIDOS_TEXTOS['g' + i] = textoPedido(p.startsWith('Sin ') ? '' : p, items);
-      const filasHtml = items.map(s => `<div class="lista-item">
-        <div><div class="nombre">${s.insumos?.nombre || ''}</div>
-          <div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}Hay ${fmtCant(s.cantidad_actual)} ${unidadTxtStock(s)} · mínimo ${fmtCant(s.stock_minimo)} ${unidadTxtStock(s)}</div></div>
-        <div style="text-align:right;flex:none"><div class="nombre">${s.cantidad_pedido ? s.cantidad_pedido : '—'}</div><div class="sub">a pedir</div></div>
-      </div>`).join('');
-      return `<details class="grupo-stock" open>
-        <summary><span>${p} <span class="grupo-cant">(${items.length})${dias ? ' · ' + dias : ''}</span></span></summary>
-        <div class="grupo-stock-body">${filasHtml}
-          <button type="button" class="secundario btn-copiar-pedido" data-g="g${i}" style="margin-top:6px">Copiar pedido</button>
-          <button type="button" class="secundario btn-wsp-pedido" data-g="g${i}">Mandar por WhatsApp</button>
-        </div>
+    let n = 0;
+    let totalPedir = 0;
+    const html = categorias.map(cat => {
+      const todos = porCategoria[cat];
+      const bajos = todos.filter(estaBajoMinimo);
+      const conMinimo = todos.filter(s => Number(s.stock_minimo) > 0 && !estaBajoMinimo(s));
+      const sinMinimo = todos.filter(s => !(Number(s.stock_minimo) > 0));
+      totalPedir += bajos.length;
+      const titulo = ETIQUETA_SUBCATEGORIA[cat] || cat;
+      // pedidos de la categoría, por proveedor
+      const grupos = {};
+      bajos.forEach(s => { const p = s.proveedor_pedido || 'Sin proveedor asignado'; (grupos[p] = grupos[p] || []).push(s); });
+      const nombres = Object.keys(grupos).sort((a, b) => (a.startsWith('Sin ') ? 1 : 0) - (b.startsWith('Sin ') ? 1 : 0) || a.localeCompare(b));
+      const bloquesProv = nombres.map(p => {
+        const items = grupos[p].sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
+        const dias = [...new Set(items.map(s => s.dias_pedido).filter(Boolean))].join(' · ');
+        const key = 'g' + (n++);
+        PEDIDOS_TEXTOS[key] = textoPedido(p.startsWith('Sin ') ? '' : p, items);
+        const filasHtml = items.map(s => `<div class="lista-item">
+          <div><div class="nombre">${s.insumos?.nombre || ''}</div>
+            <div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}Hay ${fmtCant(s.cantidad_actual)} ${unidadTxtStock(s)} · mínimo ${fmtCant(s.stock_minimo)} ${unidadTxtStock(s)}</div></div>
+          <div style="text-align:right;flex:none"><div class="nombre">${s.cantidad_pedido ? s.cantidad_pedido : '—'}</div><div class="sub">a pedir</div></div>
+        </div>`).join('');
+        return `<div style="margin-bottom:10px"><div class="nombre" style="margin:4px 0">${p}${dias ? ` <span class="grupo-cant">· ${dias}</span>` : ''}</div>${filasHtml}
+          <button type="button" class="secundario btn-copiar-pedido" data-g="${key}">Copiar pedido a ${p.startsWith('Sin ') ? 'este grupo' : p}</button>
+          <button type="button" class="secundario btn-wsp-pedido" data-g="${key}">Mandar por WhatsApp</button></div>`;
+      }).join('');
+      const okHtml = conMinimo.length ? `<details style="margin-top:6px"><summary style="padding:8px 4px;font-weight:600;font-size:13px">Con mínimo cargado y sin necesidad de pedir (${conMinimo.length})</summary>` +
+        conMinimo.sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || '')).map(s => `<div class="lista-item"><div><div class="nombre">${s.insumos?.nombre || ''}</div><div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}${s.proveedor_pedido || 'sin proveedor'}</div></div><div style="text-align:right;flex:none" class="sub">Hay ${fmtCant(s.cantidad_actual)} ${unidadTxtStock(s)}<br>mínimo ${fmtCant(s.stock_minimo)} ${unidadTxtStock(s)}</div></div>`).join('') + '</details>' : '';
+      const sinHtml = sinMinimo.length ? `<div class="aviso">${sinMinimo.length} sin mínimo cargado (se carga en Stock, con el botón ⚙).</div>` : '';
+      const cuerpo = (bloquesProv || '<div class="aviso">Nada para pedir en este stock. 👍</div>') + okHtml + sinHtml;
+      return `<details class="grupo-stock"${bajos.length ? ' open' : ''}>
+        <summary><span>Stock de ${titulo.toLowerCase()} <span class="grupo-cant">(${bajos.length ? '<b class="bajo-minimo">' + bajos.length + ' para pedir</b>' : 'todo en orden'})</span></span></summary>
+        <div class="grupo-stock-body">${cuerpo}</div>
       </details>`;
-    }).join('') + avisoSin;
+    }).join('');
+    cont.innerHTML = (totalPedir ? `<div class="aviso"><b>${totalPedir}</b> insumos para pedir.</div>` : '<div class="aviso">No hay nada para pedir. 👍</div>') + html;
     cont.querySelectorAll('.btn-copiar-pedido').forEach(b => {
       b.onclick = async () => {
+        const original = b.textContent;
         try { await navigator.clipboard.writeText(PEDIDOS_TEXTOS[b.dataset.g]); b.textContent = '✓ Copiado'; }
         catch (e) { window.prompt('Copiá el pedido:', PEDIDOS_TEXTOS[b.dataset.g]); }
-        setTimeout(() => { b.textContent = 'Copiar pedido'; }, 2000);
+        setTimeout(() => { b.textContent = original; }, 2000);
       };
     });
     cont.querySelectorAll('.btn-wsp-pedido').forEach(b => {

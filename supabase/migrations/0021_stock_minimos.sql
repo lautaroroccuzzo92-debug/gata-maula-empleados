@@ -171,14 +171,24 @@ begin
     ('quesos','AZUL BAVARIA','quesos','QUESO AZUL BAVARIA',null,null,'kg',null,null,null),
     ('quesos','ROMANITO MIGUE','quesos',null,null,null,'kg',null,null,null)
   ) as v(old_sub, old_name, new_sub, new_nombre, new_marca, minimo, unidad, dias, prov, cant) loop
+    -- filas vacias de la planilla (sin minimo ni proveedor) no pisan nada
+    if t.minimo is null and t.prov is null then continue; end if;
     k := null;
     if t.new_nombre is not null then k := public._insumo_id(t.new_sub, t.new_nombre, t.new_marca); end if;
-    if k is null then
-      select i.id into k from public.insumos i join public.stock s on s.insumo_id = i.id
-        where i.subcategoria::text = t.old_sub and lower(i.nombre) = lower(t.old_name) limit 1;
-    end if;
-    if k is not null then
-      update public.stock set stock_minimo = coalesce(t.minimo, 0), unidad = t.unidad, dias_pedido = t.dias, proveedor_pedido = t.prov, cantidad_pedido = t.cant where insumo_id = k;
+    -- 1) cargar a TODO insumo que ya tenga stock y coincida por catalogo o por el nombre de la planilla
+    update public.stock st set stock_minimo = coalesce(t.minimo, 0), unidad = t.unidad, dias_pedido = t.dias, proveedor_pedido = t.prov, cantidad_pedido = t.cant
+      from public.insumos i
+     where i.id = st.insumo_id
+       and (i.id = k
+         or (i.subcategoria::text = t.old_sub and lower(i.nombre) = lower(t.old_name))
+         or (t.new_nombre is not null and lower(i.nombre) = lower(t.new_nombre) and lower(coalesce(i.marca, '')) = lower(coalesce(t.new_marca, ''))));
+    -- 2) si el insumo del catalogo existe pero no tenia fila de stock, se la creamos en 0
+    if k is not null and not exists (select 1 from public.stock where insumo_id = k) then
+      insert into public.stock (insumo_id, cantidad_actual, stock_minimo, unidad, dias_pedido, proveedor_pedido, cantidad_pedido)
+      values (k, 0, coalesce(t.minimo, 0), t.unidad, t.dias, t.prov, t.cant);
+      raise notice 'Stock creado en 0: % %', t.new_nombre, coalesce(t.new_marca, '');
+    elsif k is null then
+      raise notice 'No encontrado en el catalogo: %', t.old_name;
     end if;
   end loop;
 end
