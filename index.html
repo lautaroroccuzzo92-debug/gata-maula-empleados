@@ -267,6 +267,7 @@
         <button class="cap-btn oculto" id="btn-nav-ingresos"><span class="emoji">🧾</span>Ingresos/Egresos</button>
         <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
         <button class="cap-btn" id="btn-nav-pedidos"><span class="emoji">🛒</span>Pedidos<span class="badge-alertas oculto" id="badge-pedidos">0</span></button>
+        <button class="cap-btn oculto" id="btn-nav-ventas"><span class="emoji">📈</span>Ventas Postberry</button>
         <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Insumos y precios</button>
         <button class="cap-btn oculto" id="btn-nav-eerr"><span class="emoji">📊</span>Estado de resultados</button>
         <button class="cap-btn oculto" id="btn-nav-calendario"><span class="emoji">📅</span>Calendario de pagos<span class="badge-alertas oculto" id="badge-calendario">0</span></button>
@@ -553,6 +554,32 @@
     <button class="secundario" id="btn-volver-pedidos">Volver</button>
   </div>
 
+  <!-- PANTALLA: VENTAS POSTBERRY (admin y encargado ven el análisis; solo admin sube los archivos) -->
+  <div id="pantalla-ventas" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Ventas (Postberry)</h2>
+    <div class="aviso" id="ventas-estado">Cargando...</div>
+
+    <div class="card oculto" id="ventas-carga">
+      <h3 style="margin:0 0 6px">Subir ventas de Postberry</h3>
+      <div class="aviso" style="margin-top:0">En Postberry exportá a Excel <b>ventas_detalle</b> y <b>movcaja</b> del mismo período, y subí los dos juntos acá. Lo que ya estaba cargado en esas fechas se reemplaza, así que no se duplica nada.</div>
+      <input type="file" id="ventas-archivos" accept=".xlsx,.xls" multiple style="margin-top:8px">
+      <div class="aviso" id="ventas-archivos-info"></div>
+      <button class="big" id="btn-ventas-subir" style="margin-top:8px">Subir y reemplazar el período</button>
+      <div class="aviso" id="ventas-progreso"></div>
+    </div>
+
+    <div class="card">
+      <div class="fila2">
+        <div><label style="margin-top:0">Desde</label><input type="date" id="ventas-desde"></div>
+        <div><label style="margin-top:0">Hasta</label><input type="date" id="ventas-hasta"></div>
+      </div>
+      <button class="big" id="btn-ventas-ver" style="margin-top:8px">Ver análisis</button>
+      <div class="aviso">El día de negocio termina a las 6 de la mañana: lo vendido de madrugada cuenta para el día anterior.</div>
+    </div>
+    <div id="ventas-resultado"></div>
+    <button class="secundario" id="btn-volver-ventas">Volver</button>
+  </div>
+
   <!-- GATO ASISTENTE: mascota flotante + panel de chat (admin, encargado y cocina; solo lectura) -->
   <button id="gato-btn" class="oculto" type="button" aria-label="Abrir el asistente">
     <span id="gato-burbuja" class="oculto">¡Tocame si necesitás ayuda!</span>
@@ -743,6 +770,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="eerr-motor.js"></script>
 <script>
 // ============================================================
@@ -853,7 +881,7 @@ function categoriasDisponibles() {
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','ventas','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
@@ -908,6 +936,7 @@ function aplicarGatingPorRol() {
   document.getElementById('btn-nav-caja').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-ingresos').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-precios').classList.toggle('oculto', !soloAdminEncargado);
+  document.getElementById('btn-nav-ventas').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-alertas').classList.toggle('oculto', !soloAdminEncargado);
   document.getElementById('btn-nav-calendario').classList.toggle('oculto', rol !== 'admin');
   document.getElementById('btn-nav-eerr').classList.toggle('oculto', rol !== 'admin');
@@ -1613,13 +1642,175 @@ document.getElementById('btn-nav-pedidos').onclick = async () => {
 };
 document.getElementById('btn-volver-pedidos').onclick = () => irAHome();
 
+// ---------- Ventas Postberry (subida de Excel + análisis) ----------
+const fmtPesos = (n) => { const v = Math.round(Number(n) || 0); return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('es-AR'); };
+const fmtDiaCorto = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}`; };
+let VENTAS_ARCHIVOS = [];
+
+function isoLocal(y, m, d, H, M, S) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${y}-${p(m)}-${p(d)}T${p(H)}:${p(M)}:${p(S)}`;
+}
+// Postberry: ventas_detalle trae dd/mm/aaaa 24 hs; movcaja trae m/d/aaaa con AM/PM. Se aceptan también fechas reales de Excel.
+function parsearFechaPos(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') { const c = XLSX.SSF.parse_date_code(v); return c ? isoLocal(c.y, c.m, c.d, c.H, c.M, Math.floor(c.S)) : null; }
+  const m = String(v).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!m) return null;
+  const a = Number(m[1]), b = Number(m[2]);
+  let H = Number(m[4]);
+  const ampm = m[7] ? m[7].toUpperCase() : null;
+  if (ampm === 'PM' && H < 12) H += 12;
+  if (ampm === 'AM' && H === 12) H = 0;
+  const mes = ampm ? a : b, dia = ampm ? b : a;
+  return isoLocal(m[3], mes, dia, H, Number(m[5]), Number(m[6] || 0));
+}
+const numPos = (v) => { if (v == null || v === '') return null; const n = Number(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
+
+async function leerExcelPos(file) {
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', raw: true });
+  const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { raw: true, defval: null });
+  const cab = filas.length ? Object.keys(filas[0]) : [];
+  if (cab.includes('idVenta') && cab.includes('Producto')) {
+    const lineas = filas.map(r => ({
+      venta_id: String(r['idVenta']), tipo: r['Tipo'], pv: numPos(r['PV']), numero: numPos(r['Numero']), fecha: parsearFechaPos(r['Fecha']),
+      total_venta: numPos(r['TotalVenta']), anulado: String(r['Anulado'] || '').toLowerCase().startsWith('s'), producto: String(r['Producto'] || '').trim(),
+      familia: r['Familia'] ? String(r['Familia']).trim() : null, proveedor: r['Proveedor'], costo: numPos(r['Costo']), precio_unit: numPos(r['Precio U']),
+      cantidad: numPos(r['Cantidad']), neto: numPos(r['Neto']), descuentos: numPos(r['Descuentos']), impuestos: numPos(r['Impuestos'])
+    })).filter(r => r.fecha && r.producto);
+    return { tipo: 'detalle', nombre: file.name, filas: lineas };
+  }
+  if (cab.includes('Cond. Pago') && cab.includes('Importe')) {
+    const pagos = filas.map(r => ({
+      fecha: parsearFechaPos(r['Fecha']), cond_pago: String(r['Cond. Pago'] || '').trim().toUpperCase(), documento: r['Documento'], pv: numPos(r['PV']),
+      numero: numPos(r['Numero']), importe: numPos(r['Importe']), tipo: r['Tipo'], observacion: r['Observacion']
+    })).filter(r => r.fecha && r.cond_pago && r.importe != null);
+    return { tipo: 'movcaja', nombre: file.name, filas: pagos };
+  }
+  return { tipo: null, nombre: file.name, filas: [] };
+}
+
+document.getElementById('ventas-archivos').addEventListener('change', async (e) => {
+  const info = document.getElementById('ventas-archivos-info');
+  VENTAS_ARCHIVOS = [];
+  info.textContent = 'Leyendo archivos...';
+  const partes = [];
+  for (const f of e.target.files) {
+    try {
+      const r = await leerExcelPos(f);
+      if (r.tipo) VENTAS_ARCHIVOS.push(r);
+      partes.push(r.tipo ? `✅ ${f.name}: ${r.filas.length} filas (${r.tipo === 'detalle' ? 'ventas_detalle' : 'movcaja'})` : `⚠️ ${f.name}: no lo reconozco (se necesitan ventas_detalle y movcaja)`);
+    } catch (err) { partes.push(`⚠️ ${f.name}: no se pudo leer (${err.message})`); }
+  }
+  info.innerHTML = partes.join('<br>');
+});
+
+document.getElementById('btn-ventas-subir').onclick = async () => {
+  const prog = document.getElementById('ventas-progreso');
+  if (!VENTAS_ARCHIVOS.length) { prog.textContent = 'Elegí primero los archivos.'; return; }
+  const btn = document.getElementById('btn-ventas-subir');
+  btn.disabled = true;
+  try {
+    for (const a of VENTAS_ARCHIVOS) {
+      const nombre = a.tipo === 'detalle' ? 'ventas_detalle' : 'movcaja';
+      const fechas = a.filas.map(r => r.fecha).sort();
+      prog.textContent = `Preparando ${nombre}...`;
+      const { error: e0 } = await sb.rpc('pos_borrar_rango', { p_desde: fechas[0], p_hasta: fechas[fechas.length - 1], p_lineas: a.tipo === 'detalle', p_pagos: a.tipo === 'movcaja' });
+      if (e0) throw new Error(e0.message);
+      const rpc = a.tipo === 'detalle' ? 'pos_cargar_lineas' : 'pos_cargar_pagos';
+      for (let i = 0; i < a.filas.length; i += 300) {
+        prog.textContent = `Subiendo ${nombre}: ${Math.min(i + 300, a.filas.length)} de ${a.filas.length}...`;
+        const { error } = await sb.rpc(rpc, { p_filas: a.filas.slice(i, i + 300) });
+        if (error) throw new Error(error.message);
+      }
+    }
+    prog.textContent = '✅ Listo. Ventas cargadas.';
+    document.getElementById('ventas-archivos').value = '';
+    document.getElementById('ventas-archivos-info').textContent = '';
+    VENTAS_ARCHIVOS = [];
+    await cargarEstadoVentas(true);
+    await verAnalisisVentas();
+  } catch (err) {
+    prog.textContent = '⚠️ ' + err.message + ' — volvé a subir los archivos (no se duplica nada).';
+  }
+  btn.disabled = false;
+};
+
+async function cargarEstadoVentas(ajustarFechas) {
+  const est = document.getElementById('ventas-estado');
+  const { data, error } = await sb.rpc('pos_estado');
+  if (error) { est.textContent = 'No pude leer el estado: ' + error.message; return null; }
+  if (!data.ventas) {
+    est.textContent = 'Todavía no hay ventas de Postberry cargadas.';
+    return data;
+  }
+  est.innerHTML = `Hay cargadas <b>${data.ventas}</b> ventas del <b>${fmtDiaCorto(data.dia_desde)}</b> al <b>${fmtDiaCorto(data.dia_hasta)}</b>${data.pagos ? '' : ' (faltan los cobros: subí también movcaja para el control de caja)'}.`;
+  if (ajustarFechas) {
+    document.getElementById('ventas-desde').value = data.dia_desde;
+    document.getElementById('ventas-hasta').value = data.dia_hasta;
+  }
+  return data;
+}
+
+function barras(items, fValor, fEtiqueta, fDetalle) {
+  const max = Math.max(1, ...items.map(fValor));
+  return items.map(it => `<div style="margin:5px 0"><div style="display:flex;justify-content:space-between;font-size:13px;gap:8px"><span>${fEtiqueta(it)}</span><span style="white-space:nowrap">${fDetalle(it)}</span></div>
+    <div style="background:#e6e1d8;border-radius:6px;height:8px"><div style="background:var(--rojo, #b3262d);height:8px;border-radius:6px;width:${Math.max(2, fValor(it) / max * 100)}%"></div></div></div>`).join('');
+}
+
+async function verAnalisisVentas() {
+  const cont = document.getElementById('ventas-resultado');
+  const desde = document.getElementById('ventas-desde').value, hasta = document.getElementById('ventas-hasta').value;
+  if (!desde || !hasta) { cont.innerHTML = '<div class="aviso">Elegí las fechas.</div>'; return; }
+  cont.innerHTML = '<div class="aviso">Calculando...</div>';
+  const [a, c] = await Promise.all([sb.rpc('pos_analisis', { p_desde: desde, p_hasta: hasta }), sb.rpc('pos_control_caja', { p_desde: desde, p_hasta: hasta })]);
+  if (a.error) { cont.innerHTML = `<div class="estado-box estado-error">${a.error.message}</div>`; return; }
+  const d = a.data, r = d.resumen;
+  if (!r.tickets) { cont.innerHTML = '<div class="aviso">No hay ventas cargadas en esas fechas.</div>'; return; }
+  const sec = (titulo, cuerpo, abierto) => `<details class="grupo-stock"${abierto ? ' open' : ''}><summary><span>${titulo}</span></summary><div class="grupo-stock-body">${cuerpo}</div></details>`;
+  const resumen = `<div class="card"><div class="lista-item"><div class="nombre">Ventas</div><div class="nombre">${fmtPesos(r.ventas_total)}</div></div>
+    <div class="lista-item"><div class="nombre">Tickets</div><div class="nombre">${r.tickets}</div></div>
+    <div class="lista-item"><div class="nombre">Ticket promedio</div><div class="nombre">${fmtPesos(r.ticket_promedio)}</div></div>
+    <div class="lista-item"><div class="nombre">Promedio por día (${r.dias_con_venta} días)</div><div class="nombre">${fmtPesos(r.ventas_total / r.dias_con_venta)}</div></div>
+    <div class="lista-item"><div class="sub">Fiscal (FCB) / No fiscal (PSP)</div><div class="sub">${fmtPesos(r.ventas_fiscales_FCB)} / ${fmtPesos(r.ventas_no_fiscales_PSP)}</div></div></div>`;
+  const prods = sec('Productos más vendidos', barras(d.productos_mas_vendidos, p => p.importe, p => p.producto, p => `${p.cantidad} u · ${fmtPesos(p.importe)}${p.margen_pct != null ? ' · ' + p.margen_pct + '%' : ''}`) + '<div class="aviso">Cantidad · ventas · margen aproximado sobre el costo cargado en Postberry.</div>', true);
+  const menos = sec('Productos menos vendidos', d.productos_menos_vendidos.map(p => `<div class="lista-item"><div class="nombre">${p.producto}</div><div class="sub">${p.cantidad} u · ${fmtPesos(p.importe)}</div></div>`).join(''), false);
+  const fams = sec('Familias (rubros)', barras(d.familias, f => f.importe, f => f.familia, f => `${fmtPesos(f.importe)}`), false);
+  const dias = sec('Días de la semana', barras(d.por_dia_de_semana, x => x.promedio_por_dia, x => x.dia, x => `${fmtPesos(x.promedio_por_dia)} por día · ${x.dias} días`), true);
+  const horas = sec('Horas del día', barras(d.por_hora, x => x.total, x => `${String(x.hora).padStart(2, '0')} hs`, x => `${fmtPesos(x.total)} · ${x.tickets} tickets`), true);
+  let control = '';
+  if (!c.error && c.data.length) {
+    const difs = c.data.filter(x => x.caja_cargada && x.postberry.total && Math.abs(x.diferencia_total) >= 500);
+    const filas = c.data.map(x => {
+      const dif = x.diferencia_total;
+      const marca = x.falta ? '❔' : (Math.abs(dif) >= 500 ? '⚠️' : '✅');
+      const med = x.caja_cargada ? `<div class="sub">Efectivo ${fmtPesos(x.dif_efectivo)} · Transf. ${fmtPesos(x.dif_transferencia)} · Crédito ${fmtPesos(x.dif_credito)} · Débito ${fmtPesos(x.dif_debito)} · QR ${fmtPesos(x.dif_qr)}</div><div class="sub">(diferencia = lo cargado en caja − lo que dice Postberry)</div>` : '';
+      return `<details><summary style="padding:6px 2px;font-size:13px">${marca} ${fmtDiaCorto(x.dia)} · Postberry ${fmtPesos(x.postberry.total)} · Caja ${x.caja_cargada ? fmtPesos(x.caja_cargada.total) : '—'}${x.falta ? '' : ' · dif ' + fmtPesos(dif)}</summary>
+        <div style="padding:2px 6px 8px">${x.falta ? `<div class="sub">${x.falta}</div>` : med}${x.anulaciones ? `<div class="sub">Anulaciones: ${x.anulaciones} por ${fmtPesos(x.monto_anulado)}</div>` : ''}</div></details>`;
+    }).join('');
+    control = sec(`Control de caja (${difs.length} días con diferencia)`, `<div class="aviso" style="margin-top:0">Compara lo que registra Postberry con el cierre de caja que cargan los chicos. ⚠️ = diferencia de $500 o más.</div>` + filas, difs.length > 0);
+  }
+  cont.innerHTML = resumen + dias + horas + prods + menos + fams + control;
+}
+
+document.getElementById('btn-ventas-ver').onclick = verAnalisisVentas;
+document.getElementById('btn-nav-ventas').onclick = async () => {
+  mostrarPantalla('ventas');
+  document.getElementById('ventas-carga').classList.toggle('oculto', !USUARIO_ACTUAL || USUARIO_ACTUAL.rol !== 'admin');
+  const est = await cargarEstadoVentas(true);
+  document.getElementById('ventas-resultado').innerHTML = '';
+  if (est && est.ventas) await verAnalisisVentas();
+};
+document.getElementById('btn-volver-ventas').onclick = () => irAHome();
+
 // ---------- Asistente IA (solo lectura) ----------
 let ASISTENTE_MSGS = [];
 let ASISTENTE_OCUPADO = false;
 const ASISTENTE_SUGERENCIAS_DATOS = [
   '¿Qué tengo que pedir esta semana?',
-  '¿Qué días vendemos más y menos?',
-  '¿Qué platos tienen poco margen?'
+  '¿Qué días y horas vendemos más y menos?',
+  '¿Qué productos conviene promocionar?',
+  '¿Hay diferencias entre la caja y Postberry?'
 ];
 const ASISTENTE_SUGERENCIAS_AYUDA = {
   admin: ['¿Cómo cargo una factura?', '¿Cómo cambio el stock mínimo de un producto?'],
@@ -1631,7 +1822,7 @@ const ASISTENTE_IR = {
   mercaderia: ['card-mercaderia', 'Registrar mercadería'], desperdicio: ['btn-nav-desperdicio', 'Desperdicio'],
   stock: ['btn-nav-stock', 'Stock'], pedidos: ['btn-nav-pedidos', 'Pedidos'], recetas: ['btn-nav-recetas', 'Recetas'],
   caja: ['btn-nav-caja', 'Caja diaria'], ingresos: ['btn-nav-ingresos', 'Ingresos/Egresos'],
-  precios: ['btn-nav-precios', 'Insumos y precios'], alertas: ['btn-nav-alertas', 'Alertas'],
+  precios: ['btn-nav-precios', 'Insumos y precios'], ventas: ['btn-nav-ventas', 'Ventas Postberry'], alertas: ['btn-nav-alertas', 'Alertas'],
   eerr: ['btn-nav-eerr', 'Estado de resultados'], calendario: ['btn-nav-calendario', 'Calendario de pagos']
 };
 

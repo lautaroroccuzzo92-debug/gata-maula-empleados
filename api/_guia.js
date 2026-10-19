@@ -2,7 +2,7 @@
 // Guía de uso de la app de Gata Maula para el asistente. Si se cambia o agrega una pantalla,
 // hay que actualizar este texto para que la IA explique lo que realmente existe.
 
-export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'recetas', 'caja', 'ingresos', 'precios', 'alertas', 'eerr', 'calendario'];
+export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'recetas', 'caja', 'ingresos', 'precios', 'ventas', 'alertas', 'eerr', 'calendario'];
 
 export const GUIA = `GUÍA DE LA APP (lo único que existe; no inventes pantallas ni botones que no estén acá)
 
@@ -47,6 +47,11 @@ Resultado del negocio por mes o por año, con la pestaña "Resultados" y la pest
 
 11) CALENDARIO DE PAGOS (solo admin) — [[ir:calendario]]
 Pagos pendientes a proveedores por fecha de vencimiento. "+ Agregar pago" para sumar uno, se marca como pagado confirmando el medio de pago, y "Ver pagados recientes" muestra los ya pagados.
+
+11b) VENTAS POSTBERRY (admin y encargado ven el análisis; solo el admin sube los archivos) — [[ir:ventas]]
+Muestra qué se vende en el local, con datos del sistema de ventas Postberry: productos más y menos vendidos, familias (rubros), ventas por día de la semana y por hora, y un control de caja que compara Postberry con el cierre de caja que cargan en la app (marca con ⚠️ los días con diferencia de $500 o más).
+Para actualizar los datos (solo el admin): en Postberry exportar a Excel los reportes "ventas_detalle" y "movcaja" del mismo período, y en esta pantalla elegir los dos archivos y tocar "Subir y reemplazar el período". Lo ya cargado en esas fechas se reemplaza, no se duplica. Los datos no se actualizan solos: cubren hasta la última fecha subida.
+Para ver el análisis se eligen las fechas Desde y Hasta y se toca "Ver análisis". El día de negocio termina a las 6 de la mañana (lo de madrugada cuenta para el día anterior).
 
 12) ASISTENTE IA
 Es este chat: responde dudas de cómo usar la app y, para admin y encargado, también consultas sobre los datos del negocio (stock, ventas por día, márgenes). Solo mira, no cambia nada.
