@@ -267,6 +267,7 @@
         <button class="cap-btn oculto" id="btn-nav-ingresos"><span class="emoji">🧾</span>Ingresos/Egresos</button>
         <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
         <button class="cap-btn" id="btn-nav-pedidos"><span class="emoji">🛒</span>Pedidos<span class="badge-alertas oculto" id="badge-pedidos">0</span></button>
+        <button class="cap-btn" id="btn-nav-produccion"><span class="emoji">🥣</span>Producción<span class="badge-alertas oculto" id="badge-produccion">0</span></button>
         <button class="cap-btn oculto" id="btn-nav-ventas"><span class="emoji">📈</span>Ventas Postberry</button>
         <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Insumos y precios</button>
         <button class="cap-btn oculto" id="btn-nav-eerr"><span class="emoji">📊</span>Estado de resultados</button>
@@ -628,6 +629,95 @@
     </div>
   </div>
 
+  <!-- PANTALLA: PRODUCCIÓN Y VENCIMIENTOS (todos los roles) -->
+  <div id="pantalla-produccion" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Producción y vencimientos</h2>
+    <div class="aviso" id="prod-resumen">Cargando...</div>
+    <div class="eerr-tabs" style="flex-wrap:wrap">
+      <button type="button" class="eerr-tab activa" id="prod-tab-activos" data-tab="activos">Activos</button>
+      <button type="button" class="eerr-tab" id="prod-tab-cerrados" data-tab="cerrados">Cerrados</button>
+      <button type="button" class="eerr-tab" id="prod-tab-reporte" data-tab="reporte">Merma</button>
+      <button type="button" class="eerr-tab oculto" id="prod-tab-catalogo" data-tab="catalogo">Catálogo</button>
+    </div>
+
+    <div id="prod-vista-activos">
+      <button class="agregar-producto" id="btn-prod-nuevo" type="button">+ Nuevo lote</button>
+      <div class="card oculto" id="prod-form-lote">
+        <h3 id="prod-lote-titulo" style="margin:0 0 6px">Nuevo lote</h3>
+        <label style="margin-top:0">Producto</label>
+        <select id="prod-lote-item"></select>
+        <div class="fila2">
+          <div><label>Fecha de elaboración</label><input type="date" id="prod-lote-fecha"></div>
+          <div><label>Vence (estimado)</label><input type="date" id="prod-lote-vence"></div>
+        </div>
+        <div class="aviso" id="prod-lote-vida"></div>
+        <div class="fila2">
+          <div><label>Cantidad elaborada <span id="prod-lote-unidad"></span></label><input type="number" step="any" min="0" id="prod-lote-cant"></div>
+          <div><label>Quién lo produce</label><input type="text" id="prod-lote-quien" list="prod-personas"></div>
+        </div>
+        <datalist id="prod-personas"><option value="BASTIAN"><option value="ROCÍO"><option value="LUCAS"><option value="FACU"><option value="MANU"></datalist>
+        <label>Observaciones</label>
+        <textarea id="prod-lote-obs" placeholder="Opcional"></textarea>
+        <div class="aviso" id="prod-lote-error" style="color:#b3262d"></div>
+        <button class="big" id="btn-prod-guardar-lote" type="button">Guardar lote</button>
+        <button class="secundario" id="btn-prod-cancelar-lote" type="button">Cancelar</button>
+      </div>
+      <div class="card oculto" id="prod-form-cierre">
+        <h3 id="prod-cierre-titulo" style="margin:0 0 6px">Cerrar lote</h3>
+        <div class="aviso" id="prod-cierre-info" style="margin-top:0"></div>
+        <div class="fila2">
+          <div><label>Cantidad usada <span class="prod-unidad-txt"></span></label><input type="number" step="any" min="0" id="prod-cierre-usada"></div>
+          <div><label>Cantidad descartada (merma) <span class="prod-unidad-txt"></span></label><input type="number" step="any" min="0" id="prod-cierre-merma"></div>
+        </div>
+        <div class="aviso" id="prod-cierre-calculo"></div>
+        <label>Motivo de la merma</label>
+        <input type="text" id="prod-cierre-motivo" list="prod-motivos" placeholder="Ej: venció, se arruinó, sobrante">
+        <datalist id="prod-motivos"><option value="Venció"><option value="Se arruinó"><option value="Sobrante"><option value="Error de elaboración"></datalist>
+        <div class="aviso" id="prod-cierre-error" style="color:#b3262d"></div>
+        <button class="big" id="btn-prod-confirmar-cierre" type="button">Cerrar lote</button>
+        <button class="secundario" id="btn-prod-cancelar-cierre" type="button">Cancelar</button>
+      </div>
+      <div id="prod-lista-activos"></div>
+    </div>
+
+    <div id="prod-vista-cerrados" class="oculto"><div id="prod-lista-cerrados"></div></div>
+
+    <div id="prod-vista-reporte" class="oculto">
+      <div class="card">
+        <div class="fila2">
+          <div><label style="margin-top:0">Desde</label><input type="date" id="prod-rep-desde"></div>
+          <div><label style="margin-top:0">Hasta</label><input type="date" id="prod-rep-hasta"></div>
+        </div>
+        <button class="big" id="btn-prod-rep-ver" type="button" style="margin-top:8px">Ver merma</button>
+        <div class="aviso">Cuenta los lotes cerrados cuya elaboración cae en esas fechas.</div>
+      </div>
+      <div id="prod-reporte"></div>
+    </div>
+
+    <div id="prod-vista-catalogo" class="oculto">
+      <button class="agregar-producto" id="btn-prod-item-nuevo" type="button">+ Nuevo producto</button>
+      <div class="card oculto" id="prod-form-item">
+        <h3 id="prod-item-titulo" style="margin:0 0 6px">Producto</h3>
+        <label style="margin-top:0">Nombre</label><input type="text" id="prod-item-nombre">
+        <div class="fila2">
+          <div><label>Vida útil (días)</label><input type="number" min="1" id="prod-item-vida"></div>
+          <div><label>Se mide en</label><select id="prod-item-unidad"><option value="kg">Kilos</option><option value="unidad">Unidades</option></select></div>
+        </div>
+        <label>Preparación de Recetas (para valorizar la merma)</label>
+        <select id="prod-item-insumo"></select>
+        <div class="aviso">Si lo vinculás, la merma se calcula en pesos con el costo por kilo de esa preparación y se suma a Desperdicios.</div>
+        <label>Notas</label><input type="text" id="prod-item-notas">
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px"><input type="checkbox" id="prod-item-activo" style="width:auto;margin:0"> Activo (aparece al cargar lotes)</label>
+        <div class="aviso" id="prod-item-error" style="color:#b3262d"></div>
+        <button class="big" id="btn-prod-item-guardar" type="button">Guardar</button>
+        <button class="secundario" id="btn-prod-item-cancelar" type="button">Cancelar</button>
+      </div>
+      <div id="prod-lista-catalogo"></div>
+    </div>
+
+    <button class="secundario" id="btn-volver-produccion">Volver</button>
+  </div>
+
   <!-- PANTALLA: RECETAS para cocina (sin costos ni precios; pueden crear y modificar las suyas) -->
   <div id="pantalla-recetas-ver" class="oculto">
     <h2 class="section-title" style="margin-top:0">Recetas</h2>
@@ -907,7 +997,7 @@ function categoriasDisponibles() {
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','ventas','recetas-ver','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','ventas','recetas-ver','produccion','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
@@ -978,6 +1068,7 @@ function irAHome() {
   cargarListas();
   actualizarBadgeAlertas();
   actualizarBadgePedidos();
+  actualizarBadgeProduccion();
 }
 
 // ---------- Config ----------
@@ -1668,6 +1759,307 @@ document.getElementById('btn-nav-pedidos').onclick = async () => {
 };
 document.getElementById('btn-volver-pedidos').onclick = () => irAHome();
 
+// ---------- Producción y vencimientos ----------
+const PROD_ALERTA_DIAS = 2; // "pronto a vencer" = faltan 2 días o menos
+let PROD_ITEMS = [];
+let PROD_LOTES = [];
+let PROD_EDIT_ID = null;
+let PROD_CIERRE = null;
+let PROD_ITEM_EDIT = null;
+let PROD_INSUMOS_PREP = null;
+
+const prodHoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const prodSumarDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const prodDiasHasta = (iso) => Math.round((Date.parse(iso + 'T12:00:00') - Date.parse(prodHoy() + 'T12:00:00')) / 86400000);
+const prodFecha = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
+const prodNum = (n) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 3 });
+const prodUni = (u) => (u === 'unidad' ? 'u' : 'kg');
+const prodPuedeCatalogo = () => USUARIO_ACTUAL && ['admin', 'encargado'].includes(USUARIO_ACTUAL.rol);
+
+async function actualizarBadgeProduccion() {
+  const badge = document.getElementById('badge-produccion');
+  try {
+    const { data, error } = await sb.rpc('produccion_estado');
+    if (error) throw error;
+    const n = (data.vencidos || 0) + (data.por_vencer || 0);
+    badge.textContent = n;
+    badge.classList.toggle('oculto', n === 0);
+  } catch (e) { badge.classList.add('oculto'); }
+}
+
+function prodEstadoLote(l) {
+  const d = prodDiasHasta(l.vence_el);
+  if (d < 0) return { icono: '🔴', texto: `VENCIDO hace ${-d} ${-d === 1 ? 'día' : 'días'}`, clase: 'bajo-minimo', orden: 0 };
+  if (d <= PROD_ALERTA_DIAS) return { icono: '🟡', texto: d === 0 ? 'Vence HOY' : `Pronto a vencer: ${d === 1 ? 'queda 1 día' : `quedan ${d} días`}`, clase: '', orden: 1 };
+  return { icono: '🟢', texto: `Vigente: quedan ${d} días`, clase: '', orden: 2 };
+}
+
+function prodVista(tab) {
+  ['activos', 'cerrados', 'reporte', 'catalogo'].forEach(t => {
+    document.getElementById('prod-vista-' + t).classList.toggle('oculto', t !== tab);
+    document.getElementById('prod-tab-' + t).classList.toggle('activa', t === tab);
+  });
+  if (tab === 'cerrados') cargarProdCerrados();
+  if (tab === 'catalogo') renderProdCatalogo();
+}
+
+async function cargarProduccion() {
+  document.getElementById('prod-tab-catalogo').classList.toggle('oculto', !prodPuedeCatalogo());
+  const [it, lo] = await Promise.all([
+    sb.from('produccion_items').select('*').order('nombre'),
+    sb.from('produccion_lotes').select('*,produccion_items(nombre,unidad)').eq('estado', 'activo').order('vence_el')
+  ]);
+  if (it.error || lo.error) { document.getElementById('prod-resumen').textContent = (it.error || lo.error).message; return; }
+  PROD_ITEMS = it.data || [];
+  PROD_LOTES = lo.data || [];
+  renderProdActivos();
+  actualizarBadgeProduccion();
+}
+
+function renderProdActivos() {
+  const venc = PROD_LOTES.filter(l => prodDiasHasta(l.vence_el) < 0).length;
+  const pronto = PROD_LOTES.filter(l => { const d = prodDiasHasta(l.vence_el); return d >= 0 && d <= PROD_ALERTA_DIAS; }).length;
+  document.getElementById('prod-resumen').innerHTML = `<b>${PROD_LOTES.length}</b> lotes activos · <span class="${venc ? 'bajo-minimo' : ''}">🔴 ${venc} vencidos</span> · 🟡 ${pronto} por vencer (${PROD_ALERTA_DIAS} días o menos)`;
+  const cont = document.getElementById('prod-lista-activos');
+  if (!PROD_LOTES.length) { cont.innerHTML = '<div class="aviso">No hay lotes activos. Tocá "+ Nuevo lote" cuando elaboren algo.</div>'; return; }
+  cont.innerHTML = PROD_LOTES.map(l => {
+    const e = prodEstadoLote(l);
+    const u = prodUni(l.produccion_items?.unidad);
+    return `<div class="card" style="padding:10px;margin:8px 0">
+      <div style="display:flex;justify-content:space-between;gap:8px"><div class="nombre">${escaparHtml(l.produccion_items?.nombre || '')}</div><div class="nombre" style="white-space:nowrap">${prodNum(l.cantidad_producida)} ${u}</div></div>
+      <div class="sub ${e.clase}">${e.icono} ${e.texto}</div>
+      <div class="sub">Elaborado ${prodFecha(l.elaborado_el)} · Vence ${prodFecha(l.vence_el)}${l.producido_por ? ' · ' + escaparHtml(l.producido_por) : ''}</div>
+      ${l.observaciones ? `<div class="sub">${escaparHtml(l.observaciones)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button type="button" class="secundario prod-editar" data-id="${l.id}" style="margin:0;flex:1">Editar</button>
+        <button type="button" class="big prod-cerrar" data-id="${l.id}" style="margin:0;flex:1">Cerrar lote</button>
+      </div></div>`;
+  }).join('');
+  cont.querySelectorAll('.prod-editar').forEach(b => { b.onclick = () => abrirFormLote(PROD_LOTES.find(l => l.id === b.dataset.id)); });
+  cont.querySelectorAll('.prod-cerrar').forEach(b => { b.onclick = () => abrirCierreLote(PROD_LOTES.find(l => l.id === b.dataset.id)); });
+}
+
+// ----- nuevo lote / editar lote
+function prodActualizarVence() {
+  const item = PROD_ITEMS.find(i => i.id === document.getElementById('prod-lote-item').value);
+  const f = document.getElementById('prod-lote-fecha').value;
+  document.getElementById('prod-lote-unidad').textContent = item ? `(${item.unidad === 'unidad' ? 'unidades' : 'kg'})` : '';
+  if (item && f && !PROD_EDIT_ID) document.getElementById('prod-lote-vence').value = prodSumarDias(f, item.vida_util_dias);
+  document.getElementById('prod-lote-vida').textContent = item ? `Vida útil de ${item.nombre}: ${item.vida_util_dias} ${item.vida_util_dias === 1 ? 'día' : 'días'}.` : '';
+}
+function abrirFormLote(lote) {
+  PROD_EDIT_ID = lote ? lote.id : null;
+  document.getElementById('prod-form-cierre').classList.add('oculto');
+  const sel = document.getElementById('prod-lote-item');
+  const activos = PROD_ITEMS.filter(i => i.activo || (lote && i.id === lote.item_id));
+  sel.innerHTML = '<option value="">Elegí el producto...</option>' + activos.map(i => `<option value="${i.id}">${escaparHtml(i.nombre)}</option>`).join('');
+  sel.value = lote ? lote.item_id : '';
+  sel.disabled = !!lote;
+  document.getElementById('prod-lote-titulo').textContent = lote ? 'Modificar lote' : 'Nuevo lote';
+  document.getElementById('prod-lote-fecha').value = lote ? lote.elaborado_el : prodHoy();
+  document.getElementById('prod-lote-vence').value = lote ? lote.vence_el : '';
+  document.getElementById('prod-lote-cant').value = lote ? Number(lote.cantidad_producida) : '';
+  document.getElementById('prod-lote-quien').value = lote ? (lote.producido_por || '') : (USUARIO_ACTUAL && USUARIO_ACTUAL.nombre ? USUARIO_ACTUAL.nombre.toUpperCase() : '');
+  document.getElementById('prod-lote-obs').value = lote ? (lote.observaciones || '') : '';
+  document.getElementById('prod-lote-error').textContent = '';
+  prodActualizarVence();
+  const f = document.getElementById('prod-form-lote');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+document.getElementById('btn-prod-nuevo').onclick = () => abrirFormLote(null);
+document.getElementById('prod-lote-item').addEventListener('change', prodActualizarVence);
+document.getElementById('prod-lote-fecha').addEventListener('change', () => { if (!PROD_EDIT_ID) prodActualizarVence(); });
+document.getElementById('btn-prod-cancelar-lote').onclick = () => document.getElementById('prod-form-lote').classList.add('oculto');
+document.getElementById('btn-prod-guardar-lote').onclick = async () => {
+  const err = document.getElementById('prod-lote-error');
+  err.textContent = '';
+  const itemId = document.getElementById('prod-lote-item').value;
+  const fecha = document.getElementById('prod-lote-fecha').value, vence = document.getElementById('prod-lote-vence').value;
+  const cant = Number(document.getElementById('prod-lote-cant').value);
+  if (!itemId) { err.textContent = 'Elegí el producto.'; return; }
+  if (!fecha || !vence) { err.textContent = 'Completá la fecha de elaboración y el vencimiento.'; return; }
+  if (vence < fecha) { err.textContent = 'El vencimiento no puede ser anterior a la elaboración.'; return; }
+  if (!(cant > 0)) { err.textContent = 'Cargá cuánto se elaboró.'; return; }
+  const quien = document.getElementById('prod-lote-quien').value, obs = document.getElementById('prod-lote-obs').value;
+  const btn = document.getElementById('btn-prod-guardar-lote');
+  btn.disabled = true;
+  const { error } = PROD_EDIT_ID
+    ? await sb.rpc('produccion_editar_lote', { p_id: PROD_EDIT_ID, p_elaborado: fecha, p_vence: vence, p_cantidad: cant, p_producido_por: quien, p_obs: obs })
+    : await sb.rpc('produccion_crear_lote', { p_item_id: itemId, p_elaborado: fecha, p_cantidad: cant, p_producido_por: quien, p_vence: vence, p_obs: obs });
+  btn.disabled = false;
+  if (error) { err.textContent = error.message; return; }
+  document.getElementById('prod-form-lote').classList.add('oculto');
+  await cargarProduccion();
+};
+
+// ----- cerrar lote (cuánto se usó y cuánto se descartó)
+let PROD_USADA_TOCADA = false;
+function prodCalculoCierre() {
+  if (!PROD_CIERRE) return;
+  const prod = Number(PROD_CIERRE.cantidad_producida);
+  const usada = Number(document.getElementById('prod-cierre-usada').value) || 0;
+  const merma = Number(document.getElementById('prod-cierre-merma').value) || 0;
+  const u = prodUni(PROD_CIERRE.produccion_items?.unidad);
+  const resto = prod - usada - merma;
+  const pct = prod > 0 ? merma / prod * 100 : 0;
+  document.getElementById('prod-cierre-calculo').innerHTML = `Merma: <b>${pct.toFixed(1)}%</b>` +
+    (Math.abs(resto) > 0.0005 ? ` · <span class="${resto > 0 ? '' : 'bajo-minimo'}">${resto > 0 ? 'sin explicar' : 'de más'}: ${prodNum(Math.abs(resto))} ${u}</span>` : ' · cierra justo ✅');
+}
+function abrirCierreLote(lote) {
+  PROD_CIERRE = lote;
+  PROD_USADA_TOCADA = false;
+  document.getElementById('prod-form-lote').classList.add('oculto');
+  const u = prodUni(lote.produccion_items?.unidad);
+  const vencido = prodDiasHasta(lote.vence_el) < 0;
+  document.getElementById('prod-cierre-titulo').textContent = 'Cerrar: ' + (lote.produccion_items?.nombre || '');
+  document.getElementById('prod-cierre-info').textContent = `Se elaboraron ${prodNum(lote.cantidad_producida)} ${u} el ${prodFecha(lote.elaborado_el)}. Anotá cuánto se usó y cuánto se descartó.`;
+  document.querySelectorAll('.prod-unidad-txt').forEach(s => { s.textContent = `(${u})`; });
+  document.getElementById('prod-cierre-usada').value = vencido ? 0 : Number(lote.cantidad_producida);
+  document.getElementById('prod-cierre-merma').value = vencido ? Number(lote.cantidad_producida) : 0;
+  document.getElementById('prod-cierre-motivo').value = vencido ? 'Venció' : '';
+  document.getElementById('prod-cierre-error').textContent = '';
+  prodCalculoCierre();
+  const f = document.getElementById('prod-form-cierre');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+document.getElementById('prod-cierre-usada').addEventListener('input', () => { PROD_USADA_TOCADA = true; prodCalculoCierre(); });
+document.getElementById('prod-cierre-merma').addEventListener('input', () => {
+  if (!PROD_USADA_TOCADA && PROD_CIERRE) document.getElementById('prod-cierre-usada').value = Math.max(0, Number(PROD_CIERRE.cantidad_producida) - (Number(document.getElementById('prod-cierre-merma').value) || 0));
+  prodCalculoCierre();
+});
+document.getElementById('btn-prod-cancelar-cierre').onclick = () => { PROD_CIERRE = null; document.getElementById('prod-form-cierre').classList.add('oculto'); };
+document.getElementById('btn-prod-confirmar-cierre').onclick = async () => {
+  const err = document.getElementById('prod-cierre-error');
+  err.textContent = '';
+  if (!PROD_CIERRE) return;
+  const usada = Number(document.getElementById('prod-cierre-usada').value) || 0, merma = Number(document.getElementById('prod-cierre-merma').value) || 0;
+  if (usada < 0 || merma < 0) { err.textContent = 'Las cantidades no pueden ser negativas.'; return; }
+  const resto = Number(PROD_CIERRE.cantidad_producida) - usada - merma;
+  if (resto > 0.0005 && !confirm(`Faltan explicar ${prodNum(resto)} (ni usado ni descartado). ¿Cerrar el lote igual?`)) return;
+  if (merma > 0 && !document.getElementById('prod-cierre-motivo').value.trim()) { err.textContent = 'Poné el motivo de la merma.'; return; }
+  const btn = document.getElementById('btn-prod-confirmar-cierre');
+  btn.disabled = true;
+  const { data, error } = await sb.rpc('produccion_cerrar_lote', { p_id: PROD_CIERRE.id, p_usada: usada, p_merma: merma, p_motivo: document.getElementById('prod-cierre-motivo').value });
+  btn.disabled = false;
+  if (error) { err.textContent = error.message; return; }
+  PROD_CIERRE = null;
+  document.getElementById('prod-form-cierre').classList.add('oculto');
+  await cargarProduccion();
+};
+
+// ----- cerrados
+async function cargarProdCerrados() {
+  const cont = document.getElementById('prod-lista-cerrados');
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await sb.from('produccion_lotes').select('*,produccion_items(nombre,unidad)').eq('estado', 'cerrado').order('cerrado_el', { ascending: false }).limit(60);
+  if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
+  if (!data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay lotes cerrados.</div>'; return; }
+  const esAdmin = USUARIO_ACTUAL && USUARIO_ACTUAL.rol === 'admin';
+  cont.innerHTML = '<div class="aviso">Los últimos 60 lotes cerrados.</div>' + data.map(l => {
+    const u = prodUni(l.produccion_items?.unidad);
+    const pct = Number(l.cantidad_producida) > 0 ? (Number(l.cantidad_merma || 0) / Number(l.cantidad_producida) * 100).toFixed(1) : '0.0';
+    return `<div class="card" style="padding:10px;margin:8px 0">
+      <div style="display:flex;justify-content:space-between;gap:8px"><div class="nombre">${escaparHtml(l.produccion_items?.nombre || '')}</div><div class="sub">${prodFecha(l.elaborado_el)}</div></div>
+      <div class="sub">Elaborado ${prodNum(l.cantidad_producida)} ${u} · usado ${prodNum(l.cantidad_usada || 0)} · descartado ${prodNum(l.cantidad_merma || 0)} (${pct}%)</div>
+      ${l.motivo_merma ? `<div class="sub">Motivo: ${escaparHtml(l.motivo_merma)}</div>` : ''}
+      ${l.producido_por ? `<div class="sub">${escaparHtml(l.producido_por)}</div>` : ''}
+      ${esAdmin ? `<button type="button" class="secundario prod-reabrir" data-id="${l.id}" style="width:auto;margin:8px 0 0;padding:6px 12px;font-size:13px">Reabrir lote</button>` : ''}</div>`;
+  }).join('');
+  cont.querySelectorAll('.prod-reabrir').forEach(b => {
+    b.onclick = async () => {
+      if (!confirm('¿Reabrir este lote? Si había merma cargada en Desperdicios, se borra.')) return;
+      const { error: e } = await sb.rpc('produccion_reabrir_lote', { p_id: b.dataset.id });
+      if (e) { alert(e.message); return; }
+      await cargarProduccion();
+      await cargarProdCerrados();
+    };
+  });
+}
+
+// ----- reporte de merma
+document.getElementById('btn-prod-rep-ver').onclick = async () => {
+  const cont = document.getElementById('prod-reporte');
+  const desde = document.getElementById('prod-rep-desde').value, hasta = document.getElementById('prod-rep-hasta').value;
+  if (!desde || !hasta) { cont.innerHTML = '<div class="aviso">Elegí las fechas.</div>'; return; }
+  cont.innerHTML = '<div class="aviso">Calculando...</div>';
+  const { data, error } = await sb.rpc('produccion_reporte', { p_desde: desde, p_hasta: hasta });
+  if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
+  if (!data.length) { cont.innerHTML = '<div class="aviso">No hay lotes cerrados en esas fechas.</div>'; return; }
+  const totM = data.reduce((s, x) => s + (Number(x.valor_merma) || 0), 0);
+  const ver$ = data.some(x => x.valor_merma != null);
+  cont.innerHTML = (ver$ ? `<div class="card"><div class="lista-item"><div class="nombre">Merma total valorizada</div><div class="nombre">${fmtPesos(totM)}</div></div></div>` : '') +
+    data.map(x => `<div class="card" style="padding:10px;margin:8px 0">
+      <div style="display:flex;justify-content:space-between;gap:8px"><div class="nombre">${escaparHtml(x.producto)}</div><div class="nombre ${Number(x.merma_pct) >= 20 ? 'bajo-minimo' : ''}">${x.merma_pct ?? 0}% merma</div></div>
+      <div class="sub">${x.lotes} ${x.lotes === 1 ? 'lote' : 'lotes'} · elaborado ${prodNum(x.producido)} ${prodUni(x.unidad)} · usado ${prodNum(x.usado)} · descartado ${prodNum(x.merma)}${x.valor_merma != null && x.valor_merma > 0 ? ' · ' + fmtPesos(x.valor_merma) : ''}</div></div>`).join('');
+};
+
+// ----- catálogo (admin y encargado)
+async function prodCargarInsumosPrep() {
+  if (PROD_INSUMOS_PREP) return;
+  const { data } = await sb.from('insumos').select('id,nombre,marca').eq('es_preparacion', true).order('nombre');
+  PROD_INSUMOS_PREP = data || [];
+}
+function renderProdCatalogo() {
+  const cont = document.getElementById('prod-lista-catalogo');
+  prodCargarInsumosPrep().then(() => {
+    cont.innerHTML = PROD_ITEMS.map(i => {
+      const prep = PROD_INSUMOS_PREP.find(p => p.id === i.insumo_id);
+      return `<div class="lista-item"><div><div class="nombre">${escaparHtml(i.nombre)}${i.activo ? '' : ' <span class="sub">(inactivo)</span>'}</div>
+        <div class="sub">${i.vida_util_dias} ${i.vida_util_dias === 1 ? 'día' : 'días'} · ${i.unidad === 'unidad' ? 'unidades' : 'kg'} · ${prep ? 'merma valorizada con: ' + escaparHtml(prep.nombre) : 'sin vincular a Recetas'}</div></div>
+        <button type="button" class="secundario prod-item-editar" data-id="${i.id}" style="width:auto;margin:0;padding:6px 12px">Editar</button></div>`;
+    }).join('') || '<div class="aviso">No hay productos.</div>';
+    cont.querySelectorAll('.prod-item-editar').forEach(b => { b.onclick = () => abrirFormItem(PROD_ITEMS.find(i => i.id === b.dataset.id)); });
+  });
+}
+async function abrirFormItem(item) {
+  await prodCargarInsumosPrep();
+  PROD_ITEM_EDIT = item ? item.id : null;
+  document.getElementById('prod-item-titulo').textContent = item ? 'Modificar producto' : 'Nuevo producto';
+  document.getElementById('prod-item-nombre').value = item ? item.nombre : '';
+  document.getElementById('prod-item-vida').value = item ? item.vida_util_dias : '';
+  document.getElementById('prod-item-unidad').value = item ? item.unidad : 'kg';
+  document.getElementById('prod-item-insumo').innerHTML = '<option value="">Sin vincular</option>' + PROD_INSUMOS_PREP.map(p => `<option value="${p.id}">${escaparHtml(p.nombre)}</option>`).join('');
+  document.getElementById('prod-item-insumo').value = item && item.insumo_id ? item.insumo_id : '';
+  document.getElementById('prod-item-notas').value = item ? (item.notas || '') : '';
+  document.getElementById('prod-item-activo').checked = item ? item.activo : true;
+  document.getElementById('prod-item-error').textContent = '';
+  const f = document.getElementById('prod-form-item');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+document.getElementById('btn-prod-item-nuevo').onclick = () => abrirFormItem(null);
+document.getElementById('btn-prod-item-cancelar').onclick = () => document.getElementById('prod-form-item').classList.add('oculto');
+document.getElementById('btn-prod-item-guardar').onclick = async () => {
+  const err = document.getElementById('prod-item-error');
+  err.textContent = '';
+  const nombre = document.getElementById('prod-item-nombre').value.trim(), vida = Number(document.getElementById('prod-item-vida').value);
+  if (!nombre) { err.textContent = 'Falta el nombre.'; return; }
+  if (!(vida >= 1)) { err.textContent = 'La vida útil tiene que ser de 1 día o más.'; return; }
+  const { error } = await sb.rpc('produccion_guardar_item', {
+    p_id: PROD_ITEM_EDIT, p_nombre: nombre, p_vida_util: Math.round(vida), p_unidad: document.getElementById('prod-item-unidad').value,
+    p_notas: document.getElementById('prod-item-notas').value, p_insumo_id: document.getElementById('prod-item-insumo').value || null,
+    p_activo: document.getElementById('prod-item-activo').checked
+  });
+  if (error) { err.textContent = error.message.includes('duplicate') ? 'Ya existe un producto con ese nombre.' : error.message; return; }
+  document.getElementById('prod-form-item').classList.add('oculto');
+  await cargarProduccion();
+  renderProdCatalogo();
+};
+
+document.querySelectorAll('#pantalla-produccion .eerr-tab').forEach(b => { b.onclick = () => prodVista(b.dataset.tab); });
+document.getElementById('btn-nav-produccion').onclick = async () => {
+  mostrarPantalla('produccion');
+  document.getElementById('prod-form-lote').classList.add('oculto');
+  document.getElementById('prod-form-cierre').classList.add('oculto');
+  const hoy = prodHoy();
+  if (!document.getElementById('prod-rep-hasta').value) { document.getElementById('prod-rep-hasta').value = hoy; document.getElementById('prod-rep-desde').value = prodSumarDias(hoy, -30); }
+  prodVista('activos');
+  await cargarProduccion();
+};
+document.getElementById('btn-volver-produccion').onclick = () => irAHome();
+
 // ---------- Recetas para cocina (sin costos ni precios; pueden crear y modificar las suyas) ----------
 let RECETAS_VER = [];
 let INSUMOS_COCINA = [];
@@ -1963,7 +2355,7 @@ const ASISTENTE_SUGERENCIAS_AYUDA = {
 // Pantallas a las que el asistente puede mandar: clave -> [id del botón del inicio, texto]
 const ASISTENTE_IR = {
   mercaderia: ['card-mercaderia', 'Registrar mercadería'], desperdicio: ['btn-nav-desperdicio', 'Desperdicio'],
-  stock: ['btn-nav-stock', 'Stock'], pedidos: ['btn-nav-pedidos', 'Pedidos'], recetas: ['btn-nav-recetas', 'Recetas'],
+  stock: ['btn-nav-stock', 'Stock'], pedidos: ['btn-nav-pedidos', 'Pedidos'], produccion: ['btn-nav-produccion', 'Producción'], recetas: ['btn-nav-recetas', 'Recetas'],
   caja: ['btn-nav-caja', 'Caja diaria'], ingresos: ['btn-nav-ingresos', 'Ingresos/Egresos'],
   precios: ['btn-nav-precios', 'Insumos y precios'], ventas: ['btn-nav-ventas', 'Ventas Postberry'], alertas: ['btn-nav-alertas', 'Alertas'],
   eerr: ['btn-nav-eerr', 'Estado de resultados'], calendario: ['btn-nav-calendario', 'Calendario de pagos']

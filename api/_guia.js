@@ -2,12 +2,12 @@
 // Guía de uso de la app de Gata Maula para el asistente. Si se cambia o agrega una pantalla,
 // hay que actualizar este texto para que la IA explique lo que realmente existe.
 
-export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'recetas', 'caja', 'ingresos', 'precios', 'ventas', 'alertas', 'eerr', 'calendario'];
+export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'recetas', 'caja', 'ingresos', 'precios', 'ventas', 'produccion', 'alertas', 'eerr', 'calendario'];
 
 export const GUIA = `GUÍA DE LA APP (lo único que existe; no inventes pantallas ni botones que no estén acá)
 
 Entrada: se entra con usuario y contraseña (cada persona tiene la suya). Arriba a la izquierda está "🔓 Salir" y arriba a la derecha "⚙️" (ajustes). Después del ingreso se ve la pantalla de inicio con botones. Cada pantalla tiene un botón "Volver" abajo.
-Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Recetas (sin precios; puede crear y editar las suyas), Desperdicio, Stock y Pedidos.
+Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Recetas (sin precios; puede crear y editar las suyas), Producción y vencimientos, Desperdicio, Stock y Pedidos.
 
 1) REGISTRAR MERCADERÍA (admin y encargado) — [[ir:mercaderia]]
 Está en el inicio, en la tarjeta "Registrar mercadería". Sirve para cargar una factura o remito de un proveedor sacándole una foto.
@@ -53,6 +53,17 @@ Pagos pendientes a proveedores por fecha de vencimiento. "+ Agregar pago" para s
 Muestra qué se vende en el local, con datos del sistema de ventas Postberry: productos más y menos vendidos, familias (rubros), ventas por día de la semana y por hora, y un control de caja que compara Postberry con el cierre de caja que cargan en la app (marca con ⚠️ los días con diferencia de $500 o más).
 Para actualizar los datos (solo el admin): en Postberry exportar a Excel los reportes "ventas_detalle" y "movcaja" del mismo período, y en esta pantalla elegir los dos archivos y tocar "Subir y reemplazar el período". Lo ya cargado en esas fechas se reemplaza, no se duplica. Los datos no se actualizan solos: cubren hasta la última fecha subida.
 Para ver el análisis se eligen las fechas Desde y Hasta y se toca "Ver análisis". El día de negocio termina a las 6 de la mañana (lo de madrugada cuenta para el día anterior).
+
+11c) PRODUCCIÓN Y VENCIMIENTOS (todos) — [[ir:produccion]]
+Controla lo que cocina elabora (mayo de chimi, pesto, escabeches, etc.): cuándo se hizo, cuánto, cuándo vence, cuánto se usó y cuánta merma hubo. El botón Producción del inicio muestra un numerito rojo con los lotes vencidos o por vencer.
+Pestañas: "Activos" (lotes en curso, ordenados por lo que vence primero), "Cerrados" (historial), "Merma" (reporte) y "Catálogo" (solo admin y encargado).
+- Cargar un lote: en "Activos" tocar "+ Nuevo lote", elegir el producto, la fecha de elaboración (por defecto hoy), cuánto se elaboró (en kg o unidades) y quién lo produce. El vencimiento se calcula solo con la vida útil del producto y se puede cambiar. Guardar lote.
+- Colores: 🟢 vigente, 🟡 pronto a vencer (faltan 2 días o menos), 🔴 vencido (hay que retirarlo y registrar la merma).
+- Corregir un lote activo: botón "Editar" del lote.
+- Cerrar un lote (cuando se terminó de usar o se descartó): botón "Cerrar lote", cargar la cantidad usada y la cantidad descartada (merma) con el motivo. La app muestra el porcentaje de merma y avisa si lo usado más lo descartado no coincide con lo elaborado. Al cerrarlo deja de dar alertas. La merma de los productos vinculados a una receta se suma sola a los desperdicios, así que no hace falta cargarla de nuevo en Desperdicio.
+- Merma: elegir fechas y tocar "Ver merma" para ver por producto cuánto se elaboró, usó y descartó.
+- Catálogo (admin y encargado): lista de productos con su vida útil en días. Se puede cambiar, agregar productos nuevos y vincular cada uno con una preparación de Recetas para valorizar la merma en pesos.
+- Un lote cerrado por error solo lo puede reabrir el administrador (pestaña Cerrados, "Reabrir lote").
 
 12) ASISTENTE IA
 Es este chat: responde dudas de cómo usar la app y, para admin y encargado, también consultas sobre los datos del negocio (stock, ventas por día, márgenes). Solo mira, no cambia nada.

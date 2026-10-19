@@ -98,6 +98,43 @@ const HERRAMIENTAS = [
     }
   },
   {
+    roles: ['admin', 'encargado', 'cocina'],
+    def: {
+      name: 'produccion_lotes',
+      description: 'Lotes de producción de cocina (mayo de chimi, pesto, escabeches, etc.): los activos con fecha de elaboración, vencimiento, días que quedan, cantidad elaborada y quién los produjo; marca los vencidos y los que vencen en 2 días o menos. También hay cerrados recientes con lo usado y la merma.',
+      input_schema: { type: 'object', properties: { incluir_cerrados: { type: 'boolean', description: 'Sumar los últimos 30 lotes cerrados' }, buscar: { type: 'string', description: 'Filtrar por nombre de producto' } } }
+    },
+    async run(ctx, a) {
+      const hoy = hoyAR();
+      const dias = (iso) => Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(hoy + 'T12:00:00Z')) / 86400000);
+      const { data, error } = await ctx.sb.from('produccion_lotes').select('elaborado_el,vence_el,cantidad_producida,producido_por,observaciones,produccion_items(nombre,unidad)').eq('estado', 'activo').order('vence_el');
+      if (error) throw new Error(error.message);
+      let activos = data.map(l => ({ producto: l.produccion_items?.nombre, unidad: l.produccion_items?.unidad, elaborado: l.elaborado_el, vence: l.vence_el, dias_restantes: dias(l.vence_el),
+        estado: dias(l.vence_el) < 0 ? 'VENCIDO' : (dias(l.vence_el) <= 2 ? 'PRONTO A VENCER' : 'vigente'), cantidad: Number(l.cantidad_producida), quien: l.producido_por, obs: l.observaciones }));
+      if (a.buscar) { const q = a.buscar.toLowerCase(); activos = activos.filter(x => (x.producto || '').toLowerCase().includes(q)); }
+      const salida = { hoy, lotes_activos: activos, vencidos: activos.filter(x => x.estado === 'VENCIDO').length, por_vencer: activos.filter(x => x.estado === 'PRONTO A VENCER').length };
+      if (a.incluir_cerrados) {
+        const { data: c, error: e2 } = await ctx.sb.from('produccion_lotes').select('elaborado_el,cantidad_producida,cantidad_usada,cantidad_merma,motivo_merma,produccion_items(nombre,unidad)').eq('estado', 'cerrado').order('cerrado_el', { ascending: false }).limit(30);
+        if (e2) throw new Error(e2.message);
+        salida.cerrados_recientes = c.map(l => ({ producto: l.produccion_items?.nombre, elaborado: l.elaborado_el, producido: Number(l.cantidad_producida), usado: Number(l.cantidad_usada), merma: Number(l.cantidad_merma), motivo: l.motivo_merma }));
+      }
+      return salida;
+    }
+  },
+  {
+    roles: ['admin', 'encargado'],
+    def: {
+      name: 'produccion_merma',
+      description: 'Merma de producción por producto en un rango de fechas (según fecha de elaboración de los lotes cerrados): cuánto se elaboró, usó y descartó, porcentaje de merma y su valor en pesos.',
+      input_schema: { type: 'object', properties: FECHAS, required: ['desde', 'hasta'] }
+    },
+    async run(ctx, a) {
+      const { data, error } = await ctx.sb.rpc('produccion_reporte', { p_desde: a.desde, p_hasta: a.hasta });
+      if (error) throw new Error(error.message);
+      return { productos: data };
+    }
+  },
+  {
     roles: ['admin', 'encargado'],
     def: {
       name: 'ventas_postberry',
@@ -231,7 +268,7 @@ function promptSistema(usuario) {
   const esCocina = usuario.rol === 'cocina';
   const rolTxt = esAdmin ? 'administrador' : (esCocina ? 'personal de cocina' : 'encargado');
   const datos = esCocina
-    ? '- No tenés acceso a datos del negocio (ventas, finanzas, recetas, precios): solo ayudás a usar la app. Si piden datos, decí que eso lo ve el administrador o un encargado.\n'
+    ? '- No tenés acceso a datos del negocio (ventas, finanzas, precios, resultados): solo ayudás a usar la app. Lo único que podés consultar con herramientas son los lotes de producción de cocina y sus vencimientos (produccion_lotes). Si piden otros datos, decí que eso lo ve el administrador o un encargado.\n'
     : `- Usá las herramientas para traer los datos reales antes de responder preguntas sobre datos. Nunca inventes números. Si una herramienta no devuelve lo que hace falta, decilo.
 - Podés analizar y sugerir (qué pedir, qué día refuerza la venta, qué plato tiene poco margen, qué conviene promocionar), pero aclarando que son sugerencias basadas en los datos cargados.
 - Las ventas de Postberry (productos, horas, familias) no están conectadas en vivo: se cargan subiendo Excel en la pantalla Ventas Postberry, así que solo cubren las fechas subidas. Al usar ventas_postberry o control_caja_postberry, decí siempre qué período cubren los datos. Si no hay datos cargados, explicalo y decí que el administrador tiene que subir los Excel de Postberry en esa pantalla. Si el período es corto, aclaralo antes de sacar conclusiones fuertes (por ejemplo, con menos de 4 semanas los promedios por día de la semana son poco confiables).
