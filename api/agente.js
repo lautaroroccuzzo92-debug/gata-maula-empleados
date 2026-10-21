@@ -107,16 +107,16 @@ const HERRAMIENTAS = [
     async run(ctx, a) {
       const hoy = hoyAR();
       const dias = (iso) => Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(hoy + 'T12:00:00Z')) / 86400000);
-      const { data, error } = await ctx.sb.from('produccion_lotes').select('elaborado_el,vence_el,cantidad_producida,producido_por,observaciones,produccion_items(nombre,unidad)').eq('estado', 'activo').order('vence_el');
+      const { data, error } = await ctx.sb.from('produccion_lotes').select('elaborado_el,vida_util_dias,vence_el,cantidad_producida,cantidad_merma,producido_por,observaciones,produccion_items(nombre,unidad)').eq('estado', 'activo').order('vence_el');
       if (error) throw new Error(error.message);
       let activos = data.map(l => ({ producto: l.produccion_items?.nombre, unidad: l.produccion_items?.unidad, elaborado: l.elaborado_el, vence: l.vence_el, dias_restantes: dias(l.vence_el),
         estado: dias(l.vence_el) < 0 ? 'VENCIDO' : (dias(l.vence_el) <= 2 ? 'PRONTO A VENCER' : 'vigente'), cantidad: Number(l.cantidad_producida), quien: l.producido_por, obs: l.observaciones }));
       if (a.buscar) { const q = a.buscar.toLowerCase(); activos = activos.filter(x => (x.producto || '').toLowerCase().includes(q)); }
       const salida = { hoy, lotes_activos: activos, vencidos: activos.filter(x => x.estado === 'VENCIDO').length, por_vencer: activos.filter(x => x.estado === 'PRONTO A VENCER').length };
       if (a.incluir_cerrados) {
-        const { data: c, error: e2 } = await ctx.sb.from('produccion_lotes').select('elaborado_el,cantidad_producida,cantidad_usada,cantidad_merma,motivo_merma,produccion_items(nombre,unidad)').eq('estado', 'cerrado').order('cerrado_el', { ascending: false }).limit(30);
+        const { data: c, error: e2 } = await ctx.sb.from('produccion_lotes').select('elaborado_el,cantidad_producida,cantidad_merma,motivo_merma,produccion_items(nombre,unidad)').eq('estado', 'cerrado').order('cerrado_el', { ascending: false }).limit(30);
         if (e2) throw new Error(e2.message);
-        salida.cerrados_recientes = c.map(l => ({ producto: l.produccion_items?.nombre, elaborado: l.elaborado_el, producido: Number(l.cantidad_producida), usado: Number(l.cantidad_usada), merma: Number(l.cantidad_merma), motivo: l.motivo_merma }));
+        salida.cerrados_recientes = c.map(l => ({ producto: l.produccion_items?.nombre, elaborado: l.elaborado_el, producido: Number(l.cantidad_producida), usado: Number(l.cantidad_producida) - Number(l.cantidad_merma), merma: Number(l.cantidad_merma), motivo: l.motivo_merma }));
       }
       return salida;
     }

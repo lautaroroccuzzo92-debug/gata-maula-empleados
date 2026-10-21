@@ -55,15 +55,15 @@ Para actualizar los datos (solo el admin): en Postberry exportar a Excel los rep
 Para ver el análisis se eligen las fechas Desde y Hasta y se toca "Ver análisis". El día de negocio termina a las 6 de la mañana (lo de madrugada cuenta para el día anterior).
 
 11c) PRODUCCIÓN Y VENCIMIENTOS (todos) — [[ir:produccion]]
-Controla lo que cocina elabora (mayo de chimi, pesto, escabeches, etc.): cuándo se hizo, cuánto, cuándo vence, cuánto se usó y cuánta merma hubo. El botón Producción del inicio muestra un numerito rojo con los lotes vencidos o por vencer.
-Pestañas: "Activos" (lotes en curso, ordenados por lo que vence primero), "Cerrados" (historial), "Merma" (reporte) y "Catálogo" (solo admin y encargado).
-- Cargar un lote: en "Activos" tocar "+ Nuevo lote", elegir el producto, la fecha de elaboración (por defecto hoy), cuánto se elaboró (en kg o unidades) y quién lo produce. El vencimiento se calcula solo con la vida útil del producto y se puede cambiar. Guardar lote.
-- Colores: 🟢 vigente, 🟡 pronto a vencer (faltan 2 días o menos), 🔴 vencido (hay que retirarlo y registrar la merma).
-- Corregir un lote activo: botón "Editar" del lote.
-- Cerrar un lote (cuando se terminó de usar o se descartó): botón "Cerrar lote", cargar la cantidad usada y la cantidad descartada (merma) con el motivo. La app muestra el porcentaje de merma y avisa si lo usado más lo descartado no coincide con lo elaborado. Al cerrarlo deja de dar alertas. La merma de los productos vinculados a una receta se suma sola a los desperdicios, así que no hace falta cargarla de nuevo en Desperdicio.
-- Merma: elegir fechas y tocar "Ver merma" para ver por producto cuánto se elaboró, usó y descartó.
-- Catálogo (admin y encargado): lista de productos con su vida útil en días. Se puede cambiar, agregar productos nuevos y vincular cada uno con una preparación de Recetas para valorizar la merma en pesos.
-- Un lote cerrado por error solo lo puede reabrir el administrador (pestaña Cerrados, "Reabrir lote").
+Controla lo que cocina elabora (mayo de chimi, pesto, escabeches, etc.): cuándo se hizo, cuánto, cuándo vence y cuánta merma hubo. El botón Producción del inicio muestra un numerito rojo con los lotes vencidos o por vencer.
+Pestañas: "Activos" (lotes en curso, ordenados por lo que vence primero), "Terminados" (historial), "Merma" (reporte) y "Catálogo" (solo admin y encargado).
+- Cargar un lote: en "Activos" tocar "+ Nuevo lote". Pasos: 1) elegir el producto de la lista; 2) poner la fecha de elaboración (por defecto hoy); 3) poner la vida útil en días (aparece sugerida según el producto, pero se puede cambiar); la app muestra sola la fecha de vencimiento (elaboración + vida útil); 4) poner la cantidad que se elaboró; 5) si hubo que tirar algo, poner la merma y el motivo (si no, dejarla vacía); 6) quién lo produce y observaciones si hace falta. Guardar lote.
+- Estados: 🟢 ACTIVO (vigente), ⚠️ POR VENCER (faltan 2 días o menos), 🔴 VENCIDO (hay que retirarlo y registrar la merma).
+- Corregir un lote activo (cantidad, vida útil, merma, etc.): botón "Editar" del lote.
+- Terminar un lote (cuando se usó todo o se tiró lo que quedaba): botón "Terminar lote", poner cuánto se tiró (0 si se usó todo) y el motivo. Al terminarlo deja de dar alertas y pasa a "Terminados". La merma de los productos vinculados a una receta se suma sola a los desperdicios, así que no hace falta cargarla de nuevo en Desperdicio.
+- Merma: elegir fechas y tocar "Ver merma" para ver por producto cuánto se elaboró, usó y tiró.
+- Catálogo (admin y encargado): lista de productos con su vida útil sugerida. Se puede cambiar, agregar productos nuevos y vincular cada uno con una preparación de Recetas para valorizar la merma en pesos.
+- Un lote terminado por error solo lo puede reabrir el administrador (pestaña Terminados, "Reabrir lote").
 
 12) ASISTENTE IA
 Es este chat: responde dudas de cómo usar la app y, para admin y encargado, también consultas sobre los datos del negocio (stock, ventas por día, márgenes). Solo mira, no cambia nada.
