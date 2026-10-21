@@ -100,6 +100,7 @@
   .estado-ok{background:rgba(58,125,68,0.15);border:1px solid var(--verde);color:var(--verde);}
   .estado-error{background:rgba(168,50,50,0.15);border:1px solid var(--rojo);color:var(--rojo);}
   .oculto{display:none !important;}
+  .producto-row.match-pendiente{outline:2px solid #b3262d; outline-offset:2px;}
   /* Gato asistente */
   #gato-btn{position:fixed; right:12px; bottom:12px; width:72px; height:72px; padding:0; margin:0; border:0; background:transparent; cursor:pointer; z-index:50; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); animation:gato-flota 3.4s ease-in-out infinite; -webkit-tap-highlight-color:transparent;}
   #gato-btn svg{width:100%; height:100%; overflow:visible;}
@@ -1247,6 +1248,7 @@ document.getElementById('btn-analizar').onclick = async () => {
       return;
     }
     datosExtraidos = data.extraido;
+    await Promise.all([cargarInsumos(), cargarAliasFactura()]);
     cargarPantallaRevision(datosExtraidos);
     mostrarPantalla('revision');
   } catch (err) {
@@ -1254,6 +1256,122 @@ document.getElementById('btn-analizar').onclick = async () => {
     mostrarPantalla('home');
   }
 };
+
+// ---------- Asociar cada producto de la factura con un insumo ----------
+let ALIAS_FACTURA = {}; // clave "proveedor|texto" -> insumo_id (lo que la app ya aprendió)
+const SUBS_POR_CATEGORIA = {
+  'FIAMBRES Y QUESOS': ['fiambres', 'quesos', 'kutsi'], 'VERMUT': ['vermut', 'cerveza y sin alcohol'], 'COCINA': ['cocina', 'kutsi'],
+  'PAN': ['panes'], 'INSUMOS DE LIMPIEZA': ['limpieza'], 'DESCARTABLES': ['descartables']
+};
+const SUBS_ETIQUETA = { fiambres: 'Fiambres', quesos: 'Quesos', kutsi: 'Kutsi', vermut: 'Vermut', 'cerveza y sin alcohol': 'Cerveza y sin alcohol', cocina: 'Cocina', panes: 'Panes', limpieza: 'Limpieza', descartables: 'Descartables' };
+
+async function cargarAliasFactura() {
+  ALIAS_FACTURA = {};
+  try {
+    const filas = await traerTodo(() => sb.from('factura_alias').select('clave,insumo_id').order('clave'));
+    filas.forEach(f => { ALIAS_FACTURA[f.clave] = f.insumo_id; });
+  } catch (e) { /* si no existe la tabla todavía, se sigue sin recordar */ }
+}
+
+function claveAliasProducto(div) {
+  const texto = normalizarTexto(div.querySelector('.p-marca').value + ' ' + div.querySelector('.p-descripcion').value).replace(/\s+/g, ' ');
+  const prov = normalizarTexto(document.getElementById('rev-proveedor').value).replace(/\s+/g, ' ');
+  return texto ? prov + '|' + texto : '';
+}
+const textoInsumoParaMatch = (i) => normalizarTexto((i.marca || '') + ' ' + i.nombre);
+function puntajeProducto(textoNorm, i) {
+  const sinSueltas = (t) => t.split(" ").filter(w => w.length > 1).join(" ");
+  const t = sinSueltas(textoNorm);
+  return Math.max(similitudPalabras(t, sinSueltas(textoInsumoParaMatch(i))), similitudPalabras(t, sinSueltas(normalizarTexto(i.nombre))));
+}
+function productoRequiereInsumo(div) { return !!SUBS_POR_CATEGORIA[div.querySelector('.p-categoria').value]; }
+
+function candidatosProducto(div, filtroTexto) {
+  const subs = SUBS_POR_CATEGORIA[div.querySelector('.p-categoria').value] || [];
+  const base = LISTA_INSUMOS.filter(i => !i.es_preparacion);
+  if (filtroTexto && filtroTexto.trim()) {
+    const q = normalizarTexto(filtroTexto);
+    return base.filter(i => coincideInsumo(i, q)).slice(0, 40).map(i => ({ i, score: 0 }));
+  }
+  const textoNorm = normalizarTexto(div.querySelector('.p-marca').value + ' ' + div.querySelector('.p-descripcion').value).replace(/\s+/g, ' ');
+  return base.map(i => ({ i, score: puntajeProducto(textoNorm, i), enCat: subs.includes(i.subcategoria) }))
+    .filter(x => x.score > 0 || x.enCat)
+    .sort((a, b) => (b.score - a.score) || ((b.enCat ? 1 : 0) - (a.enCat ? 1 : 0)))
+    .slice(0, 8);
+}
+
+function pintarOpcionesInsumo(div, filtroTexto) {
+  const sel = div.querySelector('.p-insumo');
+  const actual = sel.value;
+  const cands = candidatosProducto(div, filtroTexto);
+  let html = '<option value="">— Elegí el insumo —</option>';
+  html += cands.map(x => `<option value="${x.i.id}">${escaparHtml(etiquetaInsumo(x.i))} · ${escaparHtml(SUBS_ETIQUETA[x.i.subcategoria] || x.i.subcategoria)}${x.score >= 0.5 ? ` (${Math.round(x.score * 100)}% parecido)` : ''}</option>`).join('');
+  html += '<option value="__nuevo__">➕ Es un insumo nuevo (crearlo)</option>';
+  sel.innerHTML = html;
+  if ([...sel.options].some(o => o.value === actual)) sel.value = actual;
+}
+
+function evaluarMatch(div, forzar) {
+  const caja = div.querySelector('.p-match');
+  if (!productoRequiereInsumo(div)) { caja.classList.add('oculto'); return; }
+  caja.classList.remove('oculto');
+  if (div.dataset.manual === '1' && !forzar) { pintarMatchEstado(div); return; }
+  const sel = div.querySelector('.p-insumo');
+  const textoNorm = normalizarTexto(div.querySelector('.p-marca').value + ' ' + div.querySelector('.p-descripcion').value).replace(/\s+/g, ' ');
+  div.dataset.auto = '';
+  pintarOpcionesInsumo(div, '');
+  if (!textoNorm.trim()) { sel.value = ''; pintarMatchEstado(div); return; }
+  // 1) lo que la app ya aprendió de ese proveedor
+  const aliasId = ALIAS_FACTURA[claveAliasProducto(div)];
+  if (aliasId && LISTA_INSUMOS.some(i => i.id === aliasId)) {
+    if (![...sel.options].some(o => o.value === aliasId)) {
+      const i = LISTA_INSUMOS.find(x => x.id === aliasId);
+      sel.insertAdjacentHTML('beforeend', `<option value="${i.id}">${escaparHtml(etiquetaInsumo(i))}</option>`);
+    }
+    sel.value = aliasId; div.dataset.auto = 'alias';
+  } else {
+    // 2) igual (mismas palabras) a un insumo de la lista
+    const exacto = LISTA_INSUMOS.filter(i => !i.es_preparacion && puntajeProducto(textoNorm, i) === 1);
+    if (exacto.length === 1) { sel.value = exacto[0].id; div.dataset.auto = 'exacto'; }
+    else { sel.value = ''; }
+  }
+  pintarMatchEstado(div);
+}
+
+function pintarMatchEstado(div) {
+  const sel = div.querySelector('.p-insumo');
+  const est = div.querySelector('.p-match-estado');
+  const v = sel.value;
+  div.classList.remove('match-pendiente');
+  if (!v) {
+    est.innerHTML = '⚠️ <b>No es igual a ningún insumo.</b> Elegí cuál es (o buscalo abajo).';
+    est.style.color = '#b3262d';
+    div.classList.add('match-pendiente');
+  } else if (v === '__nuevo__') {
+    est.innerHTML = '➕ Se va a crear como <b>insumo nuevo</b>.';
+    est.style.color = '';
+  } else {
+    const i = LISTA_INSUMOS.find(x => x.id === v);
+    const tag = div.dataset.auto === 'alias' ? ' (recordado de otras facturas)' : (div.dataset.auto === 'exacto' ? ' (coincide)' : '');
+    est.innerHTML = `✅ Va a <b>${escaparHtml(i ? etiquetaInsumo(i) : '')}</b>${tag}`;
+    est.style.color = '';
+  }
+}
+
+function prepararMatchFila(div) {
+  const sel = div.querySelector('.p-insumo');
+  div.querySelector('.p-buscar-insumo').addEventListener('input', (e) => {
+    pintarOpcionesInsumo(div, e.target.value);
+    div.querySelector('.p-buscar-cuenta').textContent = e.target.value.trim() ? `${sel.options.length - 2} resultados` : '';
+  });
+  sel.addEventListener('change', () => { div.dataset.manual = '1'; div.dataset.auto = ''; pintarMatchEstado(div); });
+  ['.p-marca', '.p-descripcion'].forEach(c => div.querySelector(c).addEventListener('input', () => { if (div.dataset.manual !== '1') evaluarMatch(div); }));
+  div.querySelector('.p-categoria').addEventListener('change', () => { div.dataset.manual = ''; evaluarMatch(div, true); });
+  evaluarMatch(div, true);
+}
+function reevaluarMatches() {
+  document.querySelectorAll('#lista-productos .producto-row').forEach(div => { if (div.dataset.manual !== '1') evaluarMatch(div); });
+}
 
 // ---------- Pantalla de revisión ----------
 function cargarPantallaRevision(datos) {
@@ -1342,7 +1460,7 @@ document.getElementById('rev-proveedor').addEventListener('input', (e) => {
   });
 });
 document.getElementById('rev-proveedor').addEventListener('blur', () => {
-  setTimeout(() => revisarProveedor(), 200); // timeout para permitir el click en una sugerencia antes de ocultarla
+  setTimeout(() => { revisarProveedor(); reevaluarMatches(); }, 200); // timeout para permitir el click en una sugerencia antes de ocultarla
 });
 
 document.getElementById('rev-pagado').onchange = (e) => {
@@ -1361,6 +1479,13 @@ function agregarFilaProducto(p) {
       <div><label>Marca</label><input type="text" class="p-marca" value="${p.marca || ''}"></div>
       <div><label>Descripción</label><input type="text" class="p-descripcion" value="${p.descripcion || ''}"></div>
     </div>
+    <div class="p-match oculto" style="margin-top:8px;padding:8px;border-radius:10px;background:rgba(255,255,255,.55)">
+      <div class="p-match-estado" style="font-size:13px"></div>
+      <label style="margin-top:6px">Insumo de "Insumos y precios"</label>
+      <select class="p-insumo"></select>
+      <input type="text" class="p-buscar-insumo" placeholder="Buscar otro insumo por nombre o marca..." style="margin-top:6px">
+      <div class="aviso p-buscar-cuenta" style="margin-top:2px"></div>
+    </div>
     <div class="fila3">
       <div><label>Kg/Litros</label><input type="number" step="0.01" class="p-kg" value="${p.kg_litros ?? ''}"></div>
       <div><label>Unidades</label><input type="number" step="1" class="p-unidades" value="${p.unidades ?? ''}"></div>
@@ -1372,6 +1497,7 @@ function agregarFilaProducto(p) {
   `;
   div.querySelector('.quitar-producto').onclick = () => div.remove();
   cont.appendChild(div);
+  prepararMatchFila(div);
 }
 document.getElementById('btn-agregar-producto').onclick = () => agregarFilaProducto({});
 document.getElementById('btn-cancelar-revision').onclick = () => {
@@ -1381,7 +1507,13 @@ document.getElementById('btn-cancelar-revision').onclick = () => {
 };
 
 function leerProductosDeFormulario() {
-  return Array.from(document.querySelectorAll('#lista-productos .producto-row')).map(div => ({
+  return Array.from(document.querySelectorAll('#lista-productos .producto-row')).map(div => {
+    const req = productoRequiereInsumo(div);
+    const v = req ? div.querySelector('.p-insumo').value : '';
+    return {
+    insumo_id: v && v !== '__nuevo__' ? v : null,
+    crear_nuevo: v === '__nuevo__',
+    clave_alias: req && v ? claveAliasProducto(div) : null,
     categoria: div.querySelector('.p-categoria').value,
     marca: div.querySelector('.p-marca').value.trim(),
     descripcion: div.querySelector('.p-descripcion').value.trim(),
@@ -1389,7 +1521,13 @@ function leerProductosDeFormulario() {
     unidades: div.querySelector('.p-unidades').value ? Number(div.querySelector('.p-unidades').value) : null,
     precio_unitario: Number(div.querySelector('.p-precio').value || 0),
     total: Number(div.querySelector('.p-total').value || 0)
-  }));
+    };
+  });
+}
+
+// Productos de la factura que todavía no tienen insumo elegido (hay que resolverlos antes de guardar)
+function productosSinInsumo() {
+  return Array.from(document.querySelectorAll('#lista-productos .producto-row')).filter(div => productoRequiereInsumo(div) && !div.querySelector('.p-insumo').value);
 }
 
 // ---------- Confirmar y guardar ----------
@@ -1397,6 +1535,12 @@ document.getElementById('btn-confirmar').onclick = async () => {
   const productos = leerProductosDeFormulario();
   if (productos.length === 0) {
     alert('Agregá al menos un producto.');
+    return;
+  }
+  const pendientes = productosSinInsumo();
+  if (pendientes.length) {
+    pendientes[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    alert(`Hay ${pendientes.length} ${pendientes.length === 1 ? 'producto' : 'productos'} sin insumo elegido (marcados con borde rojo). Elegí a qué insumo corresponde cada uno, o marcalo como insumo nuevo.`);
     return;
   }
   const ivaVal = document.getElementById('rev-iva').value;
