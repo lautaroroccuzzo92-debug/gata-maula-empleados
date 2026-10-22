@@ -177,7 +177,7 @@ const HERRAMIENTAS = [
     async run(ctx, a) {
       const { data, error } = await ctx.sb.rpc('pos_control_caja', { p_desde: a.desde, p_hasta: a.hasta });
       if (error) throw new Error(error.message);
-      return { dias: data, nota: 'diferencia = caja cargada en la app - Postberry. QR de Postberry se compara con QR Posnet + QR Mercado Pago de la app.' };
+      return { dias: data, nota: 'diferencia = caja cargada en la app - Postberry. QR de Postberry se compara con QR Posnet + QR de la app.' };
     }
   },
   {

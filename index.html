@@ -472,6 +472,7 @@
       <div class="aviso">Si cerrás después de medianoche, la fecha es la del día en que abrió el turno. Cargá solo lo de tu turno.</div>
       <div class="aviso" id="caja-info-cierre"></div>
       <div class="producto-row" style="margin-top:8px">
+        <div class="nombre" style="margin-bottom:2px">Ventas facturadas <span class="sub">(tarjetas, transferencia y QR Posnet)</span></div>
         <div class="fila2">
           <div><label style="margin-top:0">Tarjeta crédito</label><input type="number" step="0.01" class="caja-campo" id="caja-tarjeta-credito"></div>
           <div><label style="margin-top:0">Tarjeta débito</label><input type="number" step="0.01" class="caja-campo" id="caja-tarjeta-debito"></div>
@@ -480,11 +481,17 @@
           <div><label>Transferencia</label><input type="number" step="0.01" class="caja-campo" id="caja-transferencia"></div>
           <div><label>QR Posnet</label><input type="number" step="0.01" class="caja-campo" id="caja-qr-posnet"></div>
         </div>
-        <div class="fila2" style="margin-top:8px">
-          <div><label>QR Mercado Pago</label><input type="number" step="0.01" class="caja-campo" id="caja-qr-mercado-pago"></div>
-          <div><label>Efectivo</label><input type="number" step="0.01" class="caja-campo" id="caja-efectivo"></div>
-        </div>
+        <div class="sub" style="margin-top:6px">Subtotal facturado: <b id="caja-sub-facturado">$0,00</b></div>
       </div>
+      <div class="producto-row" style="margin-top:8px">
+        <div class="nombre" style="margin-bottom:2px">Ventas sin facturar <span class="sub">(efectivo y QR)</span></div>
+        <div class="fila2">
+          <div><label style="margin-top:0">Efectivo</label><input type="number" step="0.01" class="caja-campo" id="caja-efectivo"></div>
+          <div><label style="margin-top:0">QR</label><input type="number" step="0.01" class="caja-campo" id="caja-qr-mercado-pago"></div>
+        </div>
+        <div class="sub" style="margin-top:6px">Subtotal sin facturar: <b id="caja-sub-nofacturado">$0,00</b></div>
+      </div>
+      <div class="sub" style="margin-top:8px;text-align:center">Total del turno</div>
       <div class="total-vivo" id="caja-total-vivo">$0,00</div>
     </div>
     <button class="big" id="btn-guardar-caja">Guardar cierre</button>
@@ -3412,8 +3419,13 @@ const fmtFechaHoraAR = (iso) => new Date(iso).toLocaleString('es-AR', { timeZone
 const fmtFechaCorta = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}`; };
 
 function actualizarTotalCaja() {
-  const total = CAMPOS_CAJA.reduce((acc, c) => acc + Number(document.getElementById('caja-' + c).value || 0), 0);
-  document.getElementById('caja-total-vivo').textContent = `$${total.toLocaleString('es-AR',{minimumFractionDigits:2})}`;
+  const v = (c) => Number(document.getElementById('caja-' + c).value || 0);
+  const fmt = (n) => `$${n.toLocaleString('es-AR',{minimumFractionDigits:2})}`;
+  const facturado = v('tarjeta-credito') + v('tarjeta-debito') + v('transferencia') + v('qr-posnet');
+  const sinFacturar = v('efectivo') + v('qr-mercado-pago');
+  document.getElementById('caja-sub-facturado').textContent = fmt(facturado);
+  document.getElementById('caja-sub-nofacturado').textContent = fmt(sinFacturar);
+  document.getElementById('caja-total-vivo').textContent = fmt(facturado + sinFacturar);
 }
 CAMPOS_CAJA.forEach(c => document.getElementById('caja-' + c).addEventListener('input', actualizarTotalCaja));
 
@@ -3458,7 +3470,7 @@ function renderCierresCaja() {
   cont.innerHTML = Object.keys(porDia).sort().reverse().slice(0, 14).map(f => {
     const del = porDia[f];
     const total = del.reduce((s, x) => s + Number(x.total), 0);
-    const filas = del.map(x => `<div class="sub" style="margin-top:4px"><b>${NOMBRE_TURNO[x.turno]}</b> · ${fmtPesos(x.total)} · cerró <b>${escaparHtml(x.cerro || '—')}</b> (${fmtFechaHoraAR(x.cerro_el)})${x.edito ? ` · corregido por ${escaparHtml(x.edito)} (${fmtFechaHoraAR(x.edito_el)})` : ''}</div>`).join('');
+    const filas = del.map(x => `<div class="sub" style="margin-top:4px"><b>${NOMBRE_TURNO[x.turno]}</b> · ${fmtPesos(x.total)} (fact. ${fmtPesos(Number(x.credito) + Number(x.debito) + Number(x.transferencia) + Number(x.qr_posnet))} · sin fact. ${fmtPesos(Number(x.efectivo) + Number(x.qr_mp))}) · cerró <b>${escaparHtml(x.cerro || '—')}</b> (${fmtFechaHoraAR(x.cerro_el)})${x.edito ? ` · corregido por ${escaparHtml(x.edito)} (${fmtFechaHoraAR(x.edito_el)})` : ''}</div>`).join('');
     return `<div class="card" style="padding:10px;margin:8px 0"><div style="display:flex;justify-content:space-between"><div class="nombre">${fmtFechaCorta(f)}</div><div class="nombre">${fmtPesos(total)}</div></div>${filas}</div>`;
   }).join('');
 }
