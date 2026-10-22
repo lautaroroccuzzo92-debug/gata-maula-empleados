@@ -177,7 +177,7 @@ const HERRAMIENTAS = [
     async run(ctx, a) {
       const { data, error } = await ctx.sb.rpc('pos_control_caja', { p_desde: a.desde, p_hasta: a.hasta });
       if (error) throw new Error(error.message);
-      return { dias: data, nota: 'diferencia = caja cargada en la app - Postberry. QR de Postberry se compara con QR Posnet + QR de la app.' };
+      return { dias: data, nota: 'diferencia = caja cargada en la app - Postberry. En Postberry el QR de ventas con factura (FCB) se compara con QR Posnet de la caja y el QR de ventas sin factura (PSP) con el QR de la caja. Facturado (caja) = crédito + débito + transferencia + QR Posnet; sin facturar = efectivo + QR.' };
     }
   },
   {
