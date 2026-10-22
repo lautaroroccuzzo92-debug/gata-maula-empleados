@@ -74,8 +74,11 @@ const HERRAMIENTAS = [
       input_schema: { type: 'object', properties: FECHAS, required: ['desde', 'hasta'] }
     },
     async run(ctx, a) {
-      const filas = await traer(() => ctx.sb.from('caja_diaria').select('fecha,venta_total,tarjeta_credito,tarjeta_debito,transferencia,qr_posnet,qr_mercado_pago,efectivo').gte('fecha', a.desde).lte('fecha', a.hasta).order('fecha'));
-      const dias = filas.filter(f => Number(f.venta_total) > 0);
+      const filas = await traer(() => ctx.sb.from('caja_diaria').select('fecha,turno,venta_total,tarjeta_credito,tarjeta_debito,transferencia,qr_posnet,qr_mercado_pago,efectivo').gte('fecha', a.desde).lte('fecha', a.hasta).order('fecha'));
+      // un día puede tener dos cierres (mañana y tarde): se suman por fecha
+      const porFecha = {};
+      filas.forEach(f => { const d = porFecha[f.fecha] = porFecha[f.fecha] || { fecha: f.fecha, venta_total: 0, tarjeta_credito: 0, tarjeta_debito: 0, transferencia: 0, qr_posnet: 0, qr_mercado_pago: 0, efectivo: 0, turnos: {} }; ['venta_total','tarjeta_credito','tarjeta_debito','transferencia','qr_posnet','qr_mercado_pago','efectivo'].forEach(k => { d[k] += Number(f[k] || 0); }); d.turnos[f.turno] = Number(f.venta_total); });
+      const dias = Object.values(porFecha).filter(f => Number(f.venta_total) > 0);
       if (!dias.length) return { mensaje: 'No hay ventas cargadas en ese rango.' };
       const porSem = {}, porMes = {}, medios = { tarjeta_credito: 0, tarjeta_debito: 0, transferencia: 0, qr_posnet: 0, qr_mercado_pago: 0, efectivo: 0 };
       dias.forEach(f => {
@@ -132,6 +135,19 @@ const HERRAMIENTAS = [
       const { data, error } = await ctx.sb.rpc('produccion_reporte', { p_desde: a.desde, p_hasta: a.hasta });
       if (error) throw new Error(error.message);
       return { productos: data };
+    }
+  },
+  {
+    roles: ['admin', 'encargado'],
+    def: {
+      name: 'cierres_de_caja',
+      description: 'Cierres de caja cargados en la app, uno por turno (mañana / tarde) y día, con el total, los medios de pago y QUIÉN hizo cada cierre (y quién lo corrigió, si se corrigió).',
+      input_schema: { type: 'object', properties: FECHAS, required: ['desde', 'hasta'] }
+    },
+    async run(ctx, a) {
+      const { data, error } = await ctx.sb.rpc('caja_cierres', { p_desde: a.desde, p_hasta: a.hasta });
+      if (error) throw new Error(error.message);
+      return { cierres: data.slice(0, 120) };
     }
   },
   {

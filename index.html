@@ -460,8 +460,17 @@
   <div id="pantalla-caja" class="oculto">
     <h2 class="section-title" style="margin-top:0">Cierre de caja diaria</h2>
     <div class="card">
-      <label style="margin-top:0">Fecha</label>
-      <input type="date" id="caja-fecha">
+      <div class="fila2">
+        <div><label style="margin-top:0">Fecha</label><input type="date" id="caja-fecha"></div>
+        <div><label style="margin-top:0">Turno</label>
+          <select id="caja-turno">
+            <option value="manana">Mañana (10:30 a 16:00)</option>
+            <option value="tarde">Tarde (17:30 a 00:30)</option>
+            <option value="completo" class="oculto" id="caja-opt-completo">Día completo (cierre viejo)</option>
+          </select></div>
+      </div>
+      <div class="aviso">Si cerrás después de medianoche, la fecha es la del día en que abrió el turno. Cargá solo lo de tu turno.</div>
+      <div class="aviso" id="caja-info-cierre"></div>
       <div class="producto-row" style="margin-top:8px">
         <div class="fila2">
           <div><label style="margin-top:0">Tarjeta crédito</label><input type="number" step="0.01" class="caja-campo" id="caja-tarjeta-credito"></div>
@@ -481,6 +490,9 @@
     <button class="big" id="btn-guardar-caja">Guardar cierre</button>
     <button class="secundario" id="btn-cancelar-caja">Volver</button>
     <div id="caja-resultado"></div>
+    <h3 style="margin:16px 0 4px">Últimos cierres</h3>
+    <div class="aviso" style="margin-top:0">Cada cierre guarda quién lo cargó y, si se corrigió, quién lo modificó.</div>
+    <div id="caja-lista-cierres"></div>
   </div>
 
   <!-- PANTALLA: INGRESOS / EGRESOS -->
@@ -2472,9 +2484,14 @@ async function verAnalisisVentas() {
     const filas = c.data.map(x => {
       const dif = x.diferencia_total;
       const marca = x.falta ? '❔' : (Math.abs(dif) >= 500 ? '⚠️' : '✅');
+      const turnos = (x.turnos || []).map(t => {
+        const m = t.falta ? `<div class="sub">${t.falta}</div>` : `<div class="sub">Dif.: Efectivo ${fmtPesos(t.dif_efectivo)} · Transf. ${fmtPesos(t.dif_transferencia)} · Crédito ${fmtPesos(t.dif_credito)} · Débito ${fmtPesos(t.dif_debito)} · QR ${fmtPesos(t.dif_qr)}</div>`;
+        const mk = t.falta ? '❔' : (Math.abs(t.diferencia_total) >= 500 ? '⚠️' : '✅');
+        return `<div style="margin-top:6px"><div class="sub"><b>${mk} ${t.turno === 'manana' ? 'Turno mañana' : 'Turno tarde'}</b> · Postberry ${fmtPesos(t.postberry_total)} · Caja ${t.caja_total != null ? fmtPesos(t.caja_total) : '—'}${t.falta ? '' : ' · dif ' + fmtPesos(t.diferencia_total)}${t.cerro ? ' · cerró ' + escaparHtml(t.cerro) : ''}</div>${m}</div>`;
+      }).join('');
       const med = x.caja_cargada ? `<div class="sub">Efectivo ${fmtPesos(x.dif_efectivo)} · Transf. ${fmtPesos(x.dif_transferencia)} · Crédito ${fmtPesos(x.dif_credito)} · Débito ${fmtPesos(x.dif_debito)} · QR ${fmtPesos(x.dif_qr)}</div><div class="sub">(diferencia = lo cargado en caja − lo que dice Postberry)</div>` : '';
       return `<details><summary style="padding:6px 2px;font-size:13px">${marca} ${fmtDiaCorto(x.dia)} · Postberry ${fmtPesos(x.postberry.total)} · Caja ${x.caja_cargada ? fmtPesos(x.caja_cargada.total) : '—'}${x.falta ? '' : ' · dif ' + fmtPesos(dif)}</summary>
-        <div style="padding:2px 6px 8px">${x.falta ? `<div class="sub">${x.falta}</div>` : med}${x.anulaciones ? `<div class="sub">Anulaciones: ${x.anulaciones} por ${fmtPesos(x.monto_anulado)}</div>` : ''}</div></details>`;
+        <div style="padding:2px 6px 8px">${x.cerro ? `<div class="sub">Cierre de caja cargado por: ${escaparHtml(x.cerro)}</div>` : ''}${turnos || (x.falta ? `<div class="sub">${x.falta}</div>` : med)}${x.anulaciones ? `<div class="sub">Anulaciones: ${x.anulaciones} por ${fmtPesos(x.monto_anulado)}</div>` : ''}</div></details>`;
     }).join('');
     control = sec(`Control de caja (${difs.length} días con diferencia)`, `<div class="aviso" style="margin-top:0">Compara lo que registra Postberry con el cierre de caja que cargan los chicos. ⚠️ = diferencia de $500 o más.</div>` + filas, difs.length > 0);
   }
@@ -3381,17 +3398,18 @@ document.getElementById('btn-guardar-receta').onclick = async () => {
   cargarListaRecetas();
 };
 
-// ---------- Caja diaria ----------
+// ---------- Caja diaria (un cierre por turno; queda registrado quién lo hizo) ----------
 const CAMPOS_CAJA = ['tarjeta-credito','tarjeta-debito','transferencia','qr-posnet','qr-mercado-pago','efectivo'];
+const NOMBRE_TURNO = { manana: 'Turno mañana', tarde: 'Turno tarde', completo: 'Día completo' };
+const CAJA_CAMPO_A_COL = { 'tarjeta-credito': 'credito', 'tarjeta-debito': 'debito', 'transferencia': 'transferencia', 'qr-posnet': 'qr_posnet', 'qr-mercado-pago': 'qr_mp', 'efectivo': 'efectivo' };
+let CAJA_CIERRES = [];
 
-document.getElementById('btn-nav-caja').onclick = () => {
-  document.getElementById('caja-fecha').value = new Date().toISOString().slice(0,10);
-  CAMPOS_CAJA.forEach(c => document.getElementById('caja-' + c).value = '');
-  document.getElementById('caja-resultado').innerHTML = '';
-  actualizarTotalCaja();
-  mostrarPantalla('caja');
-};
-document.getElementById('btn-cancelar-caja').onclick = () => mostrarPantalla('home');
+const isoDeFecha = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// Lo que se cierra de madrugada (hasta las 6) pertenece al día en que abrió el turno
+function fechaNegocioAhora() { const d = new Date(); if (d.getHours() < 6) d.setDate(d.getDate() - 1); return isoDeFecha(d); }
+function turnoSugeridoAhora() { const h = new Date().getHours(); return (h >= 5 && h < 17) ? 'manana' : 'tarde'; }
+const fmtFechaHoraAR = (iso) => new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const fmtFechaCorta = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}`; };
 
 function actualizarTotalCaja() {
   const total = CAMPOS_CAJA.reduce((acc, c) => acc + Number(document.getElementById('caja-' + c).value || 0), 0);
@@ -3399,23 +3417,93 @@ function actualizarTotalCaja() {
 }
 CAMPOS_CAJA.forEach(c => document.getElementById('caja-' + c).addEventListener('input', actualizarTotalCaja));
 
+function cajaCierreSeleccionado() {
+  const f = document.getElementById('caja-fecha').value, t = document.getElementById('caja-turno').value;
+  return CAJA_CIERRES.find(c => c.fecha === f && c.turno === t) || null;
+}
+
+// Muestra qué hay cargado para esa fecha y trae los valores si ese turno ya tiene cierre
+function refrescarCajaForm() {
+  const f = document.getElementById('caja-fecha').value;
+  const selT = document.getElementById('caja-turno');
+  const del = CAJA_CIERRES.filter(c => c.fecha === f);
+  const hayCompleto = del.some(c => c.turno === 'completo'), hayTurnos = del.some(c => c.turno !== 'completo');
+  const optC = document.getElementById('caja-opt-completo');
+  optC.hidden = !hayCompleto; optC.disabled = !hayCompleto;
+  [...selT.options].forEach(o => { if (o.value !== 'completo') { o.disabled = hayCompleto; } });
+  if (hayCompleto) selT.value = 'completo';
+  else if (selT.value === 'completo') selT.value = turnoSugeridoAhora();
+
+  const c = cajaCierreSeleccionado();
+  const info = document.getElementById('caja-info-cierre');
+  CAMPOS_CAJA.forEach(k => { document.getElementById('caja-' + k).value = c ? Number(c[CAJA_CAMPO_A_COL[k]]) || '' : ''; });
+  actualizarTotalCaja();
+  document.getElementById('btn-guardar-caja').textContent = c ? 'Actualizar cierre' : 'Guardar cierre';
+  if (c) {
+    info.innerHTML = `✏️ Este turno <b>ya tiene cierre</b>: lo cargó <b>${escaparHtml(c.cerro || '—')}</b> el ${fmtFechaHoraAR(c.cerro_el)}` +
+      (c.edito ? `, corregido por <b>${escaparHtml(c.edito)}</b> el ${fmtFechaHoraAR(c.edito_el)}` : '') + '. Si guardás, lo corregís.';
+  } else if (del.length) {
+    const otros = del.map(x => `${NOMBRE_TURNO[x.turno]} (${escaparHtml(x.cerro || '—')})`).join(' · ');
+    info.innerHTML = `Ya cargado ese día: ${otros}. Total del día hasta ahora: <b>${fmtPesos(del.reduce((s, x) => s + Number(x.total), 0))}</b>.`;
+  } else {
+    info.textContent = '';
+  }
+}
+
+function renderCierresCaja() {
+  const cont = document.getElementById('caja-lista-cierres');
+  if (!CAJA_CIERRES.length) { cont.innerHTML = '<div class="aviso">Todavía no hay cierres cargados.</div>'; return; }
+  const porDia = {};
+  CAJA_CIERRES.forEach(c => { (porDia[c.fecha] = porDia[c.fecha] || []).push(c); });
+  cont.innerHTML = Object.keys(porDia).sort().reverse().slice(0, 14).map(f => {
+    const del = porDia[f];
+    const total = del.reduce((s, x) => s + Number(x.total), 0);
+    const filas = del.map(x => `<div class="sub" style="margin-top:4px"><b>${NOMBRE_TURNO[x.turno]}</b> · ${fmtPesos(x.total)} · cerró <b>${escaparHtml(x.cerro || '—')}</b> (${fmtFechaHoraAR(x.cerro_el)})${x.edito ? ` · corregido por ${escaparHtml(x.edito)} (${fmtFechaHoraAR(x.edito_el)})` : ''}</div>`).join('');
+    return `<div class="card" style="padding:10px;margin:8px 0"><div style="display:flex;justify-content:space-between"><div class="nombre">${fmtFechaCorta(f)}</div><div class="nombre">${fmtPesos(total)}</div></div>${filas}</div>`;
+  }).join('');
+}
+
+async function cargarCierresCaja() {
+  const hasta = fechaNegocioAhora();
+  const d = new Date(); d.setDate(d.getDate() - 45);
+  const { data, error } = await sb.rpc('caja_cierres', { p_desde: isoDeFecha(d), p_hasta: hasta });
+  if (error) { document.getElementById('caja-lista-cierres').innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
+  CAJA_CIERRES = data || [];
+  renderCierresCaja();
+  refrescarCajaForm();
+}
+
+document.getElementById('btn-nav-caja').onclick = async () => {
+  document.getElementById('caja-fecha').value = fechaNegocioAhora();
+  document.getElementById('caja-turno').value = turnoSugeridoAhora();
+  CAMPOS_CAJA.forEach(c => document.getElementById('caja-' + c).value = '');
+  document.getElementById('caja-resultado').innerHTML = '';
+  document.getElementById('caja-info-cierre').textContent = '';
+  actualizarTotalCaja();
+  mostrarPantalla('caja');
+  await cargarCierresCaja();
+};
+document.getElementById('btn-cancelar-caja').onclick = () => mostrarPantalla('home');
+document.getElementById('caja-fecha').addEventListener('change', refrescarCajaForm);
+document.getElementById('caja-turno').addEventListener('change', refrescarCajaForm);
+
 document.getElementById('btn-guardar-caja').onclick = async () => {
-  const fecha = document.getElementById('caja-fecha').value;
+  const fecha = document.getElementById('caja-fecha').value, turno = document.getElementById('caja-turno').value;
   const resDiv = document.getElementById('caja-resultado');
   if (!fecha) { resDiv.innerHTML = '<div class="estado-box estado-error">Elegí una fecha.</div>'; return; }
-  const registro = {
-    fecha,
-    tarjeta_credito: Number(document.getElementById('caja-tarjeta-credito').value || 0),
-    tarjeta_debito: Number(document.getElementById('caja-tarjeta-debito').value || 0),
-    transferencia: Number(document.getElementById('caja-transferencia').value || 0),
-    qr_posnet: Number(document.getElementById('caja-qr-posnet').value || 0),
-    qr_mercado_pago: Number(document.getElementById('caja-qr-mercado-pago').value || 0),
-    efectivo: Number(document.getElementById('caja-efectivo').value || 0),
-    usuario_id: USUARIO_ACTUAL.id
-  };
-  const { error } = await sb.from('caja_diaria').upsert(registro, { onConflict: 'fecha' });
-  if (error) resDiv.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`;
-  else resDiv.innerHTML = '<div class="estado-box estado-ok">✅ Cierre guardado.</div>';
+  const existente = cajaCierreSeleccionado();
+  if (existente && !confirm(`Este turno ya tiene un cierre cargado por ${existente.cerro || 'otra persona'}. ¿Querés corregirlo con estos valores?`)) return;
+  const n = (c) => Number(document.getElementById('caja-' + c).value || 0);
+  const btn = document.getElementById('btn-guardar-caja');
+  btn.disabled = true;
+  const { error } = await sb.rpc('guardar_cierre_caja', {
+    p_fecha: fecha, p_turno: turno, p_credito: n('tarjeta-credito'), p_debito: n('tarjeta-debito'), p_transferencia: n('transferencia'),
+    p_qr_posnet: n('qr-posnet'), p_qr_mp: n('qr-mercado-pago'), p_efectivo: n('efectivo')
+  });
+  btn.disabled = false;
+  if (error) { resDiv.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(error.message)}</div>`; return; }
+  resDiv.innerHTML = `<div class="estado-box estado-ok">✅ Cierre del ${NOMBRE_TURNO[turno].toLowerCase()} guardado por ${escaparHtml(USUARIO_ACTUAL.nombre)}.</div>`;
+  await cargarCierresCaja();
 };
 
 // ---------- Ingresos / Egresos (igual que la hoja EGRESOS del Excel) ----------
