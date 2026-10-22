@@ -914,6 +914,8 @@
       <input type="text" id="ins-ed-nombre">
       <div id="ins-ed-resultado"></div>
       <button class="big" id="btn-ins-ed-guardar" type="button">Guardar cambios</button>
+      <button class="secundario" id="btn-ins-ed-stock-alta" type="button">📦 Empezar a controlar su stock</button>
+      <button class="secundario" id="btn-ins-ed-stock-baja" type="button">Sacarlo del control de stock</button>
       <div id="ins-ed-admin">
         <details style="margin-top:14px">
           <summary style="font-weight:600;padding:6px 0">Está repetido: unirlo con otro insumo</summary>
@@ -3027,6 +3029,8 @@ async function abrirEditarInsumo(id) {
   f.classList.remove('oculto');
   f.scrollIntoView({ behavior: 'smooth' });
   const { data } = await sb.rpc('insumo_uso', { p_id: id });
+  document.getElementById('btn-ins-ed-stock-alta').classList.toggle('oculto', !!(data && data.stock));
+  document.getElementById('btn-ins-ed-stock-baja').classList.toggle('oculto', !(data && data.stock));
   if (data) {
     const partes = [];
     partes.push(data.recetas && data.recetas.length ? `Se usa en ${data.recetas.length} ${data.recetas.length === 1 ? 'receta' : 'recetas'}` : 'No se usa en recetas');
@@ -3056,6 +3060,21 @@ document.getElementById('btn-ins-ed-guardar').onclick = async () => {
   const { error } = await sb.rpc('insumo_editar', { p_id: INS_ED_ID, p_nombre: nombre, p_marca: document.getElementById('ins-ed-marca').value, p_subcategoria: document.getElementById('ins-ed-categoria').value });
   if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
   await terminarEdicionInsumo();
+};
+document.getElementById('btn-ins-ed-stock-alta').onclick = async () => {
+  const res = document.getElementById('ins-ed-resultado');
+  const i = LISTA_INSUMOS.find(x => x.id === INS_ED_ID);
+  const { error } = await sb.rpc('stock_alta', { p_insumo_id: INS_ED_ID, p_unidad: i && i.unidad_medida === 'unidad' ? 'unidad' : 'kg' });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  await terminarEdicionInsumo('Listo: ahora aparece en Stock (con 0). Cargá la cantidad y el mínimo desde Stock.');
+};
+document.getElementById('btn-ins-ed-stock-baja').onclick = async () => {
+  const res = document.getElementById('ins-ed-resultado');
+  const i = LISTA_INSUMOS.find(x => x.id === INS_ED_ID);
+  if (!confirm(`¿Sacar "${etiquetaInsumo(i)}" del control de stock? El insumo sigue en Insumos y precios y en las recetas.`)) return;
+  const { error } = await sb.rpc('stock_baja', { p_insumo_id: INS_ED_ID });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  await terminarEdicionInsumo('Listo: ya no aparece en Stock.');
 };
 document.getElementById('btn-ins-ed-unir').onclick = async () => {
   const res = document.getElementById('ins-ed-resultado');
