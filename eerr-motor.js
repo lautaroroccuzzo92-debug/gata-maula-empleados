@@ -76,7 +76,7 @@
     add('tr', 'TRANSFERENCIA', 'linea', tr);
     add('totalA', 'TOTAL VENTAS A', 'total', totalA);
     add('efe', 'EFECTIVO', 'linea', efe);
-    add('mp', 'OTROS (QR / MERCADO PAGO)', 'linea', mp);
+    add('mp', 'QR', 'linea', mp);
     add('totalB', 'TOTAL VENTAS B', 'total', totalB);
     add('venta', 'VENTA TOTAL', 'resultado', ventaTotal);
 
