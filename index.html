@@ -507,6 +507,29 @@
     <h2 class="section-title" style="margin-top:0">Ingresos / Egresos</h2>
     <div id="ingresos-lista"></div>
     <button class="agregar-producto" id="btn-nuevo-ingreso-egreso">+ Cargar movimiento</button>
+    <button class="agregar-producto" id="btn-nueva-nc" type="button">↩️ Cargar nota de crédito de un proveedor</button>
+    <div id="nc-form" class="oculto">
+      <div class="card">
+        <h3 style="margin:0 0 6px">Nota de crédito</h3>
+        <div class="aviso" style="margin-top:0">Resta de la factura que elijas: baja el gasto y lo que se le debe al proveedor. Si la factura ya estaba paga, queda como saldo a favor.</div>
+        <label>Proveedor</label>
+        <select id="nc-proveedor"></select>
+        <label>Factura a la que corresponde</label>
+        <select id="nc-factura"><option value="">— Primero elegí el proveedor —</option></select>
+        <div class="aviso" id="nc-info"></div>
+        <div class="fila2">
+          <div><label>N° de la nota de crédito</label><input type="text" id="nc-numero"></div>
+          <div><label>Fecha</label><input type="date" id="nc-fecha"></div>
+        </div>
+        <label>Monto de la nota de crédito ($)</label>
+        <input type="number" step="0.01" min="0" id="nc-monto">
+        <label>Observaciones</label>
+        <textarea id="nc-obs" placeholder="Opcional (ej: devolución de mercadería)"></textarea>
+        <div id="nc-resultado"></div>
+      </div>
+      <button class="big" id="btn-nc-guardar" type="button">Registrar nota de crédito</button>
+      <button class="secundario" id="btn-nc-cancelar" type="button">Cancelar</button>
+    </div>
     <button class="secundario" id="btn-volver-ingresos">Volver</button>
 
     <div id="ingreso-egreso-form" class="oculto">
@@ -879,6 +902,29 @@
       <div id="ins-nuevo-resultado"></div>
       <button class="big" id="btn-guardar-insumo-nuevo">Guardar insumo</button>
       <button class="secundario" id="btn-cancelar-insumo-nuevo">Cancelar</button>
+    </div>
+    <div id="insumo-editar-form" class="card oculto">
+      <h2 class="section-title" style="margin-top:0">Editar insumo</h2>
+      <div class="aviso" id="ins-ed-uso" style="margin-top:0"></div>
+      <label>Categoría</label>
+      <select id="ins-ed-categoria"></select>
+      <label>Marca (opcional)</label>
+      <input type="text" id="ins-ed-marca">
+      <label>Descripción</label>
+      <input type="text" id="ins-ed-nombre">
+      <div id="ins-ed-resultado"></div>
+      <button class="big" id="btn-ins-ed-guardar" type="button">Guardar cambios</button>
+      <div id="ins-ed-admin">
+        <details style="margin-top:14px">
+          <summary style="font-weight:600;padding:6px 0">Está repetido: unirlo con otro insumo</summary>
+          <div class="aviso" style="margin-top:0">Todo lo de <b>este</b> insumo (stock, recetas, historial) pasa al insumo que elijas, y <b>este se borra</b>.</div>
+          <input type="text" id="ins-ed-buscar" placeholder="Buscar el insumo que se conserva...">
+          <select id="ins-ed-unir"></select>
+          <button class="secundario" id="btn-ins-ed-unir" type="button">Unir (se conserva el elegido)</button>
+        </details>
+        <button class="secundario" id="btn-ins-ed-eliminar" type="button" style="color:#b3262d;margin-top:10px">Eliminar este insumo</button>
+      </div>
+      <button class="secundario" id="btn-ins-ed-cancelar" type="button">Cancelar</button>
     </div>
     <input type="text" id="precios-buscador" placeholder="Buscar insumo...">
     <div id="precios-lista"></div>
@@ -2959,6 +3005,77 @@ function precioMostrado(i) {
   return Math.round(v * 100) / 100;
 }
 
+// ---------- Editar / unir / eliminar insumos ----------
+let INS_ED_ID = null;
+const SUBS_EDITABLES = ['fiambres', 'quesos', 'kutsi', 'cocina', 'vermut', 'cerveza y sin alcohol', 'panes', 'descartables', 'limpieza'];
+
+async function abrirEditarInsumo(id) {
+  const i = LISTA_INSUMOS.find(x => x.id === id);
+  if (!i) return;
+  INS_ED_ID = id;
+  document.getElementById('insumo-nuevo-form').classList.add('oculto');
+  document.getElementById('ins-ed-categoria').innerHTML = SUBS_EDITABLES.map(s => `<option value="${s}"${i.subcategoria === s ? ' selected' : ''}>${ETIQUETA_INSUMOS[s] || s}</option>`).join('');
+  document.getElementById('ins-ed-marca').value = i.marca || '';
+  document.getElementById('ins-ed-nombre').value = i.nombre || '';
+  document.getElementById('ins-ed-resultado').innerHTML = '';
+  document.getElementById('ins-ed-buscar').value = '';
+  document.getElementById('ins-ed-admin').classList.toggle('oculto', !USUARIO_ACTUAL || USUARIO_ACTUAL.rol !== 'admin');
+  pintarOpcionesUnir('');
+  const uso = document.getElementById('ins-ed-uso');
+  uso.textContent = 'Revisando dónde se usa...';
+  const f = document.getElementById('insumo-editar-form');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+  const { data } = await sb.rpc('insumo_uso', { p_id: id });
+  if (data) {
+    const partes = [];
+    partes.push(data.recetas && data.recetas.length ? `Se usa en ${data.recetas.length} ${data.recetas.length === 1 ? 'receta' : 'recetas'}` : 'No se usa en recetas');
+    if (data.stock) partes.push(`stock: ${Number(data.stock.cantidad)} (mínimo ${Number(data.stock.minimo)})`);
+    if (data.desperdicios) partes.push(`${data.desperdicios} desperdicios cargados`);
+    uso.textContent = `${i.marca ? i.marca + ' · ' : ''}${i.nombre}. ${partes.join(' · ')}.`;
+  } else uso.textContent = '';
+}
+function pintarOpcionesUnir(filtro) {
+  const q = normalizarTexto(filtro || '');
+  const lista = LISTA_INSUMOS.filter(x => !x.es_preparacion && x.id !== INS_ED_ID && (!q || coincideInsumo(x, q))).slice(0, 40);
+  document.getElementById('ins-ed-unir').innerHTML = '<option value="">— Elegí el insumo que se conserva —</option>' +
+    lista.map(x => `<option value="${x.id}">${escaparHtml(etiquetaInsumo(x))} · ${escaparHtml(ETIQUETA_INSUMOS[x.subcategoria] || x.subcategoria)}</option>`).join('');
+}
+async function terminarEdicionInsumo(msg) {
+  await cargarInsumos();
+  document.getElementById('insumo-editar-form').classList.add('oculto');
+  renderPrecios(document.getElementById('precios-buscador').value);
+  if (msg) alert(msg);
+}
+document.getElementById('ins-ed-buscar').addEventListener('input', (e) => pintarOpcionesUnir(e.target.value));
+document.getElementById('btn-ins-ed-cancelar').onclick = () => document.getElementById('insumo-editar-form').classList.add('oculto');
+document.getElementById('btn-ins-ed-guardar').onclick = async () => {
+  const res = document.getElementById('ins-ed-resultado');
+  const nombre = document.getElementById('ins-ed-nombre').value.trim();
+  if (!nombre) { res.innerHTML = '<div class="estado-box estado-error">Falta la descripción.</div>'; return; }
+  const { error } = await sb.rpc('insumo_editar', { p_id: INS_ED_ID, p_nombre: nombre, p_marca: document.getElementById('ins-ed-marca').value, p_subcategoria: document.getElementById('ins-ed-categoria').value });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  await terminarEdicionInsumo();
+};
+document.getElementById('btn-ins-ed-unir').onclick = async () => {
+  const res = document.getElementById('ins-ed-resultado');
+  const conservar = document.getElementById('ins-ed-unir').value;
+  if (!conservar) { res.innerHTML = '<div class="estado-box estado-error">Elegí el insumo que se conserva.</div>'; return; }
+  const a = LISTA_INSUMOS.find(x => x.id === INS_ED_ID), b = LISTA_INSUMOS.find(x => x.id === conservar);
+  if (!confirm(`Se va a BORRAR "${etiquetaInsumo(a)}" y todo lo suyo (stock, recetas, historial) pasa a "${etiquetaInsumo(b)}". ¿Seguro?`)) return;
+  const { error } = await sb.rpc('insumo_unir', { p_conservar: conservar, p_quitar: INS_ED_ID });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  await terminarEdicionInsumo('Listo: los dos insumos quedaron unidos.');
+};
+document.getElementById('btn-ins-ed-eliminar').onclick = async () => {
+  const res = document.getElementById('ins-ed-resultado');
+  const a = LISTA_INSUMOS.find(x => x.id === INS_ED_ID);
+  if (!confirm(`¿Eliminar "${etiquetaInsumo(a)}"? No se puede deshacer.`)) return;
+  const { error } = await sb.rpc('insumo_eliminar', { p_id: INS_ED_ID });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  await terminarEdicionInsumo('Insumo eliminado.');
+};
+
 function renderPrecios(filtro) {
   const cont = document.getElementById('precios-lista');
   const texto = normalizarTexto((filtro || '').trim());
@@ -2981,7 +3098,7 @@ function renderPrecios(filtro) {
            <span class="precio-estado" data-insumo-id="${i.id}"></span>`;
       return `<div class="lista-item">
         <div><div class="nombre">${i.nombre}</div><div class="sub">${subTxt}</div></div>
-        <div class="precio-edit-wrap">${precio}</div>
+        <div class="precio-edit-wrap">${precio}${i.es_preparacion ? "" : `<button type="button" class="secundario btn-ins-editar" data-id="${i.id}" title="Editar, unir o eliminar" style="width:auto;padding:4px 10px;margin:0 0 0 6px">✎</button>`}</div>
       </div>`;
     }).join('');
     return `<details class="grupo-stock"${abrir ? ' open' : ''}>
@@ -2990,6 +3107,7 @@ function renderPrecios(filtro) {
     </details>`;
   }).join('');
 
+  cont.querySelectorAll('.btn-ins-editar').forEach(b => { b.onclick = () => abrirEditarInsumo(b.dataset.id); });
   cont.querySelectorAll('.precio-input').forEach(input => {
     input.addEventListener('change', async () => {
       const id = input.dataset.insumoId;
@@ -3570,6 +3688,72 @@ document.getElementById('btn-nav-ingresos').onclick = async () => {
 };
 document.getElementById('btn-volver-ingresos').onclick = () => irAHome();
 
+// ---------- Notas de crédito de proveedores ----------
+let NC_FACTURAS = [];
+document.getElementById('btn-nueva-nc').onclick = async () => {
+  document.getElementById('ingreso-egreso-form').classList.add('oculto');
+  await cargarProveedoresPlazo();
+  document.getElementById('nc-proveedor').innerHTML = '<option value="">— Elegí el proveedor —</option>' + PROVEEDORES_PLAZO.map(p => `<option value="${p.id}">${escaparHtml(p.nombre)}</option>`).join('');
+  document.getElementById('nc-factura').innerHTML = '<option value="">— Primero elegí el proveedor —</option>';
+  document.getElementById('nc-info').textContent = '';
+  document.getElementById('nc-numero').value = '';
+  document.getElementById('nc-fecha').value = isoDeFecha(new Date());
+  document.getElementById('nc-monto').value = '';
+  document.getElementById('nc-obs').value = '';
+  document.getElementById('nc-resultado').innerHTML = '';
+  const f = document.getElementById('nc-form');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+};
+document.getElementById('btn-nc-cancelar').onclick = () => document.getElementById('nc-form').classList.add('oculto');
+document.getElementById('nc-proveedor').addEventListener('change', async (e) => {
+  const sel = document.getElementById('nc-factura');
+  document.getElementById('nc-info').textContent = '';
+  if (!e.target.value) { sel.innerHTML = '<option value="">— Primero elegí el proveedor —</option>'; return; }
+  sel.innerHTML = '<option value="">Buscando facturas...</option>';
+  const { data, error } = await sb.rpc('facturas_proveedor', { p_proveedor_id: e.target.value });
+  if (error) { sel.innerHTML = '<option value="">No pude traer las facturas</option>'; document.getElementById('nc-info').textContent = error.message; return; }
+  NC_FACTURAS = data || [];
+  if (!NC_FACTURAS.length) { sel.innerHTML = '<option value="">Ese proveedor no tiene facturas con número cargado</option>'; return; }
+  sel.innerHTML = '<option value="">— Elegí la factura —</option>' + NC_FACTURAS.map(f => {
+    const queda = Number(f.total) - Number(f.acreditado);
+    return `<option value="${escaparHtml(f.nro)}"${queda <= 0.009 ? ' disabled' : ''}>N° ${escaparHtml(f.nro)} · ${fmtFechaCorta(f.fecha)} · ${fmtPesos(f.total)} · ${f.pagada ? 'pagada' : 'pendiente'}${Number(f.acreditado) > 0 ? ' · ya acreditado ' + fmtPesos(f.acreditado) : ''}</option>`;
+  }).join('');
+});
+document.getElementById('nc-factura').addEventListener('change', (e) => {
+  const f = NC_FACTURAS.find(x => x.nro === e.target.value);
+  const info = document.getElementById('nc-info');
+  if (!f) { info.textContent = ''; return; }
+  const queda = Number(f.total) - Number(f.acreditado);
+  document.getElementById('nc-monto').value = Math.round(queda * 100) / 100;
+  info.innerHTML = `Factura de ${fmtPesos(f.total)} (${escaparHtml(f.conceptos || '')}). Se puede acreditar hasta <b>${fmtPesos(queda)}</b>. ` +
+    (f.pagada ? '<b>Ya está paga:</b> la nota de crédito queda como <b>saldo a favor</b> con el proveedor.' : '<b>Está pendiente:</b> la nota de crédito <b>baja lo que se le debe</b>.');
+});
+document.getElementById('btn-nc-guardar').onclick = async () => {
+  const res = document.getElementById('nc-resultado');
+  const prov = document.getElementById('nc-proveedor').value, nro = document.getElementById('nc-factura').value;
+  const monto = Number(document.getElementById('nc-monto').value);
+  if (!prov) { res.innerHTML = '<div class="estado-box estado-error">Elegí el proveedor.</div>'; return; }
+  if (!nro) { res.innerHTML = '<div class="estado-box estado-error">Elegí la factura a la que corresponde.</div>'; return; }
+  if (!(monto > 0)) { res.innerHTML = '<div class="estado-box estado-error">Poné el monto de la nota de crédito.</div>'; return; }
+  if (!confirm(`¿Registrar una nota de crédito de ${fmtPesos(monto)} sobre la factura ${nro}?`)) return;
+  const btn = document.getElementById('btn-nc-guardar');
+  btn.disabled = true;
+  const { data, error } = await sb.rpc('registrar_nota_credito', {
+    p_proveedor_id: prov, p_fecha: document.getElementById('nc-fecha').value || null, p_monto: monto,
+    p_nro_nc: document.getElementById('nc-numero').value, p_factura_nro: nro, p_obs: document.getElementById('nc-obs').value
+  });
+  btn.disabled = false;
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(error.message)}</div>`; return; }
+  const partes = [];
+  if (Number(data.baja_deuda) > 0) partes.push(`bajó la deuda con el proveedor en ${fmtPesos(data.baja_deuda)}`);
+  if (Number(data.saldo_a_favor) > 0) partes.push(`quedó un saldo a favor de ${fmtPesos(data.saldo_a_favor)} (figura en el Calendario de pagos como un renglón negativo)`);
+  const aviso = `<div class="estado-box estado-ok">✅ Nota de crédito registrada: ${partes.join(' y ')}. El gasto del mes se redujo en el mismo monto.</div>`;
+  document.getElementById('nc-form').classList.add('oculto');
+  await cargarListaIngresosEgresos();
+  document.getElementById('ingresos-lista').insertAdjacentHTML('afterbegin', aviso);
+};
+
 async function cargarProveedoresPlazo() {
   try {
     PROVEEDORES_PLAZO = await traerTodo(() => sb.from('proveedores').select('id,nombre,plazo_pago_dias').order('nombre').order('id'));
@@ -3595,7 +3779,7 @@ async function cargarListaIngresosEgresos() {
 }
 
 document.getElementById('btn-nuevo-ingreso-egreso').onclick = async () => {
-  document.getElementById('ie-fecha').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ie-fecha').value = isoDeFecha(new Date());
   document.getElementById('ie-proveedor').value = '';
   document.getElementById('ie-concepto').value = '';
   document.getElementById('ie-monto').value = '';
