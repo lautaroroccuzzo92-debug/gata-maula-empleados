@@ -2492,17 +2492,23 @@ async function verAnalisisVentas() {
       const dif = x.diferencia_total;
       const marca = x.falta ? '❔' : (Math.abs(dif) >= 500 ? '⚠️' : '✅');
       const turnos = (x.turnos || []).map(t => {
-        const m = t.falta ? `<div class="sub">${t.falta}</div>` : `<div class="sub">Dif.: Efectivo ${fmtPesos(t.dif_efectivo)} · Transf. ${fmtPesos(t.dif_transferencia)} · Crédito ${fmtPesos(t.dif_credito)} · Débito ${fmtPesos(t.dif_debito)} · QR ${fmtPesos(t.dif_qr)}</div>`;
+        const m = t.falta ? `<div class="sub">${t.falta}</div>` : `<div class="sub">Dif.: Efectivo ${fmtPesos(t.dif_efectivo)} · Transf. ${fmtPesos(t.dif_transferencia)} · Crédito ${fmtPesos(t.dif_credito)} · Débito ${fmtPesos(t.dif_debito)} · QR Posnet ${fmtPesos(t.dif_qr_posnet)} · QR ${fmtPesos(t.dif_qr)}</div>`;
         const mk = t.falta ? '❔' : (Math.abs(t.diferencia_total) >= 500 ? '⚠️' : '✅');
         return `<div style="margin-top:6px"><div class="sub"><b>${mk} ${t.turno === 'manana' ? 'Turno mañana' : 'Turno tarde'}</b> · Postberry ${fmtPesos(t.postberry_total)} · Caja ${t.caja_total != null ? fmtPesos(t.caja_total) : '—'}${t.falta ? '' : ' · dif ' + fmtPesos(t.diferencia_total)}${t.cerro ? ' · cerró ' + escaparHtml(t.cerro) : ''}</div>${m}</div>`;
       }).join('');
       const lineaCtl = (lab, pb, cj, d) => `<div class="sub">${lab}: Postberry ${fmtPesos(pb)} · Caja ${fmtPesos(cj)} · <b class="${Math.abs(d) >= 500 ? 'bajo-minimo' : ''}">dif ${fmtPesos(d)}</b></div>`;
       const med = x.caja_cargada ? (() => {
         const p = x.postberry, c = x.caja_cargada;
-        return lineaCtl('Tarjetas y transferencias', p.credito + p.debito + p.transferencia, c.credito + c.debito + c.transferencia, x.dif_tarjetas_transferencia) +
-          lineaCtl('Efectivo', p.efectivo, c.efectivo, x.dif_efectivo) + lineaCtl('QR (Posnet + QR)', p.qr, c.qr, x.dif_qr) +
-          `<div class="sub" style="margin-top:4px">Según la caja: <b>facturado</b> ${fmtPesos(c.facturado)} · <b>sin facturar</b> ${fmtPesos(c.sin_facturar)}</div>` +
-          '<div class="sub">(dif = caja − Postberry. Postberry no separa el QR facturado del QR sin facturar, por eso el QR se compara junto.)</div>';
+        const pFact = p.credito + p.debito + p.transferencia + p.qr_posnet, pSin = p.efectivo + p.qr;
+        const sub = (txt, pb, cj) => `<div class="sub" style="margin-top:2px"><b>${txt}</b>: Postberry ${fmtPesos(pb)} · Caja ${fmtPesos(cj)} · <b class="${Math.abs(cj - pb) >= 500 ? 'bajo-minimo' : ''}">dif ${fmtPesos(cj - pb)}</b></div>`;
+        return '<div class="nombre" style="font-size:13px;margin-top:4px">Facturado</div>' +
+          lineaCtl('Tarjeta crédito', p.credito, c.credito, x.dif_credito) + lineaCtl('Tarjeta débito', p.debito, c.debito, x.dif_debito) +
+          lineaCtl('Transferencia', p.transferencia, c.transferencia, x.dif_transferencia) + lineaCtl('QR Posnet', p.qr_posnet, c.qr_posnet, x.dif_qr_posnet) +
+          sub('Subtotal facturado', pFact, c.facturado) +
+          '<div class="nombre" style="font-size:13px;margin-top:8px">Sin facturar</div>' +
+          lineaCtl('Efectivo', p.efectivo, c.efectivo, x.dif_efectivo) + lineaCtl('QR', p.qr, c.qr, x.dif_qr) +
+          sub('Subtotal sin facturar', pSin, c.sin_facturar) +
+          '<div class="sub" style="margin-top:6px">(dif = caja − Postberry. En Postberry, el QR de ventas con factura cuenta como QR Posnet y el QR de ventas sin factura, como QR.)</div>';
       })() : '';
       return `<details><summary style="padding:6px 2px;font-size:13px">${marca} ${fmtDiaCorto(x.dia)} · Postberry ${fmtPesos(x.postberry.total)} · Caja ${x.caja_cargada ? fmtPesos(x.caja_cargada.total) : '—'}${x.falta ? '' : ' · dif ' + fmtPesos(dif)}</summary>
         <div style="padding:2px 6px 8px">${x.cerro ? `<div class="sub">Cierre de caja cargado por: ${escaparHtml(x.cerro)}</div>` : ''}${turnos || (x.falta ? `<div class="sub">${x.falta}</div>` : med)}${x.anulaciones ? `<div class="sub">Anulaciones: ${x.anulaciones} por ${fmtPesos(x.monto_anulado)}</div>` : ''}</div></details>`;
@@ -2510,7 +2516,7 @@ async function verAnalisisVentas() {
     const conCaja = c.data.filter(x => x.caja_cargada);
     const suma = (f) => conCaja.reduce((s, x) => s + f(x), 0);
     const resumenCtl = conCaja.length ? `<div class="card" style="padding:10px;margin:0 0 8px"><div class="nombre">Resumen del período (${conCaja.length} días con caja cargada)</div>
-      <div class="sub">Postberry: tarjetas y transferencias ${fmtPesos(suma(x => x.postberry.credito + x.postberry.debito + x.postberry.transferencia))} · efectivo ${fmtPesos(suma(x => x.postberry.efectivo))} · QR ${fmtPesos(suma(x => x.postberry.qr))}</div>
+      <div class="sub">Postberry: <b>facturado</b> ${fmtPesos(suma(x => x.postberry.credito + x.postberry.debito + x.postberry.transferencia + x.postberry.qr_posnet))} · <b>sin facturar</b> ${fmtPesos(suma(x => x.postberry.efectivo + x.postberry.qr))}</div>
       <div class="sub">Caja: <b>facturado</b> ${fmtPesos(suma(x => x.caja_cargada.facturado))} · <b>sin facturar</b> ${fmtPesos(suma(x => x.caja_cargada.sin_facturar))}</div>
       <div class="sub">Diferencia total (caja − Postberry): <b>${fmtPesos(suma(x => x.diferencia_total))}</b></div></div>` : '';
     control = sec(`Control de caja (${difs.length} días con diferencia)`, resumenCtl + '<div class="aviso" style="margin-top:0">Compara lo que registra Postberry con el cierre de caja que cargan los chicos. ⚠️ = diferencia de $500 o más.</div>' + filas, difs.length > 0);
