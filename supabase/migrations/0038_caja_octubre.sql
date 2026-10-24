@@ -1,5 +1,5 @@
 -- Gata Maula: carga los cierres de caja de OCTUBRE (hoja INGRESOS OCTUBRE de tu planilla) por turno.
---   * primera fila de cada dia = turno manana, segunda fila = turno tarde (el domingo 18/10 tiene una sola fila y es del turno tarde: coincide con Postberry)
+--   * segun la fila en que esta anotado cada cierre: primera fila del dia = turno manana, segunda fila = turno tarde; un dia sin filas anotadas es un dia cerrado
 --   * columnas: tarjeta credito, debito, transferencia, QR Posnet, QR, efectivo; cierre sistema y responsable (Manu / Facu)
 --   * no pisa nada: si ese dia y turno ya tiene un cierre, lo deja como esta (y si el dia ya tiene un cierre de dia completo, tampoco carga)
 -- Correr UNA vez en el SQL Editor (despues de 0030). Muestra al final lo cargado y lo que se salteo.
@@ -37,7 +37,7 @@ begin
     ('2026-10-16', 'tarde', 0, 112000, 12000, 0, 586175, 521202.25, null, 1231377.2, 'FACU'),
     ('2026-10-17', 'manana', 0, 73800, 218620, 0, 0, 0, null, 292420, 'MANU'),
     ('2026-10-17', 'tarde', 37000, 156300, 488200.06, 0, 63000, 300605.06, null, 1045105.1, 'FACU'),
-    ('2026-10-18', 'tarde', 0, 63500, 253675, 0, 0, 216000, null, 533175, 'MANU'),
+    ('2026-10-18', 'manana', 0, 63500, 253675, 0, 0, 216000, null, 533175, 'MANU'),
     ('2026-10-20', 'manana', 0, 0, 19000, 0, 0, 21500, null, 40500, 'MANU'),
     ('2026-10-20', 'tarde', 0, 242300, 235800.03, 0, 0, 21142.01, null, 499242.06, 'FACU'),
     ('2026-10-21', 'manana', 94500, 14800, 258800, 0, 0, 0, null, 368100, 'MANU'),
