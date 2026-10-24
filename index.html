@@ -919,6 +919,24 @@
       <button class="big" id="btn-ins-ed-guardar" type="button">Guardar cambios</button>
       <button class="secundario" id="btn-ins-ed-stock-alta" type="button">📦 Empezar a controlar su stock</button>
       <button class="secundario" id="btn-ins-ed-stock-baja" type="button">Sacarlo del control de stock</button>
+      <details style="margin-top:14px">
+        <summary style="font-weight:600;padding:6px 0">🍳 Reemplazarlo por otro insumo en las recetas</summary>
+        <div class="aviso" style="margin-top:0" id="ins-ed-rep-info">Las recetas que usan <b>este</b> insumo pasan a usar el que elijas (mismas cantidades) y se recalcula el costo.</div>
+        <input type="text" id="ins-ed-rep-buscar" placeholder="Buscar el insumo nuevo...">
+        <select id="ins-ed-rep-sel"></select>
+        <button class="secundario" id="btn-ins-ed-rep" type="button">Reemplazar en las recetas</button>
+      </details>
+      <details style="margin-top:6px">
+        <summary style="font-weight:600;padding:6px 0">🍳 Usarlo en recetas</summary>
+        <div class="aviso" style="margin-top:0">Elegí las recetas donde se suma este insumo y la cantidad que lleva cada una.</div>
+        <input type="text" id="ins-ed-rec-buscar" placeholder="Buscar recetas...">
+        <div id="ins-ed-rec-lista" style="max-height:200px;overflow:auto;margin:6px 0"></div>
+        <div class="fila2">
+          <div><label style="margin-top:0">Cantidad por receta</label><input type="number" step="any" min="0" id="ins-ed-rec-cant"></div>
+          <div><label style="margin-top:0">Medida</label><select id="ins-ed-rec-med"><option value="gramos">Gramos / ml</option><option value="unidad">Unidades</option></select></div>
+        </div>
+        <button class="secundario" id="btn-ins-ed-rec" type="button">Agregar a las recetas elegidas</button>
+      </details>
       <div id="ins-ed-admin">
         <details style="margin-top:14px">
           <summary style="font-weight:600;padding:6px 0">Está repetido: unirlo con otro insumo</summary>
@@ -1318,7 +1336,7 @@ document.getElementById('btn-analizar').onclick = async () => {
       return;
     }
     datosExtraidos = data.extraido;
-    await Promise.all([cargarInsumos(), cargarAliasFactura()]);
+    await Promise.all([cargarInsumos(), cargarAliasFactura(), cargarStockIds()]);
     cargarPantallaRevision(datosExtraidos);
     mostrarPantalla('revision');
   } catch (err) {
@@ -1409,6 +1427,7 @@ function evaluarMatch(div, forzar) {
 }
 
 function pintarMatchEstado(div) {
+  try { actualizarSumarStock(div); } catch (e) { /* aún no cargó */ }
   const sel = div.querySelector('.p-insumo');
   const est = div.querySelector('.p-match-estado');
   const v = sel.value;
@@ -1428,8 +1447,35 @@ function pintarMatchEstado(div) {
   }
 }
 
+// Stock: ¿ya está este insumo en el stock? Si no está, se ofrece sumarlo; si está, la cantidad de la factura se suma siempre
+let STOCK_IDS = new Set();
+async function cargarStockIds() {
+  try {
+    const filas = await traerTodo(() => sb.from('stock').select('insumo_id').order('insumo_id'));
+    STOCK_IDS = new Set(filas.map(f => f.insumo_id));
+  } catch (e) { STOCK_IDS = new Set(); }
+}
+function actualizarSumarStock(div) {
+  const v = div.querySelector('.p-insumo').value;
+  const wrap = div.querySelector('.p-sumar-wrap');
+  const mostrar = productoRequiereInsumo(div) && !!v && (v === '__nuevo__' || !STOCK_IDS.has(v));
+  wrap.classList.toggle('oculto', !mostrar);
+  if (!mostrar) div.querySelector('.p-sumar-stock').checked = true;
+}
+function pintarOpcionesReemplaza(div, filtro) {
+  const sel = div.querySelector('.p-reemplaza');
+  const actual = sel.value;
+  const propio = div.querySelector('.p-insumo').value;
+  const q = normalizarTexto(filtro || '');
+  const lista = q ? LISTA_INSUMOS.filter(i => !i.es_preparacion && i.id !== propio && coincideInsumo(i, q)).slice(0, 30) : [];
+  const extra = actual && !lista.some(i => i.id === actual) ? LISTA_INSUMOS.filter(i => i.id === actual) : [];
+  sel.innerHTML = '<option value="">No reemplaza a ninguno</option>' + extra.concat(lista).map(i => `<option value="${i.id}">${escaparHtml(etiquetaInsumo(i))} · ${escaparHtml(SUBS_ETIQUETA[i.subcategoria] || i.subcategoria)}</option>`).join('');
+  if ([...sel.options].some(o => o.value === actual)) sel.value = actual;
+}
+
 function prepararMatchFila(div) {
   const sel = div.querySelector('.p-insumo');
+  div.querySelector('.p-reemplaza-buscar').addEventListener('input', (e) => pintarOpcionesReemplaza(div, e.target.value));
   div.querySelector('.p-buscar-insumo').addEventListener('input', (e) => {
     pintarOpcionesInsumo(div, e.target.value);
     div.querySelector('.p-buscar-cuenta').textContent = e.target.value.trim() ? `${sel.options.length - 2} resultados` : '';
@@ -1555,6 +1601,13 @@ function agregarFilaProducto(p) {
       <select class="p-insumo"></select>
       <input type="text" class="p-buscar-insumo" placeholder="Buscar otro insumo por nombre o marca..." style="margin-top:6px">
       <div class="aviso p-buscar-cuenta" style="margin-top:2px"></div>
+      <label class="p-sumar-wrap oculto" style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;margin-top:8px"><input type="checkbox" class="p-sumar-stock" checked style="width:auto;margin:0"> 📦 Sumarlo al stock (todavía no está en el stock)</label>
+      <details style="margin-top:8px">
+        <summary style="font-size:13px;padding:4px 0">¿Reemplaza a otro insumo en las recetas?</summary>
+        <input type="text" class="p-reemplaza-buscar" placeholder="Buscar el insumo que reemplaza..." style="margin-top:4px">
+        <select class="p-reemplaza"><option value="">No reemplaza a ninguno</option></select>
+        <div class="aviso" style="margin-top:2px">Si elegís uno, las recetas que usaban ese insumo pasan a usar este.</div>
+      </details>
     </div>
     <div class="fila3">
       <div><label>Kg/Litros</label><input type="number" step="0.01" class="p-kg" value="${p.kg_litros ?? ''}"></div>
@@ -1584,6 +1637,8 @@ function leerProductosDeFormulario() {
     insumo_id: v && v !== '__nuevo__' ? v : null,
     crear_nuevo: v === '__nuevo__',
     clave_alias: req && v ? claveAliasProducto(div) : null,
+    sumar_stock: req && !div.querySelector('.p-sumar-wrap').classList.contains('oculto') ? div.querySelector('.p-sumar-stock').checked : null,
+    reemplaza_insumo_id: req && v ? (div.querySelector('.p-reemplaza').value || null) : null,
     categoria: div.querySelector('.p-categoria').value,
     marca: div.querySelector('.p-marca').value.trim(),
     descripcion: div.querySelector('.p-descripcion').value.trim(),
@@ -1676,6 +1731,7 @@ function mostrarResultado(data) {
       const detalle = data.lineas_sin_stock.map(l => `${l.nombre || '(sin nombre)'} — ${l.categoria}`).join('<br>');
       bloque('Líneas sin seguimiento de stock', true, `Estas categorías no generan insumo/stock, solo quedan en Ingresos/Egresos:<br>${detalle}`);
     }
+    if (data.reemplazos > 0) bloque('Recetas actualizadas', true, `Las recetas que usaban el insumo anterior pasaron a usar el nuevo en ${data.reemplazos} ${data.reemplazos === 1 ? 'producto' : 'productos'} de esta factura.`);
     if (data.sin_minimo && data.sin_minimo.length) {
       const detalle = data.sin_minimo.map(l => l.nombre).join('<br>');
       bloque('Productos sin mínimo de stock', false, `Para que entren en Pedidos, cargales el mínimo en <b>Stock → Sin mínimo cargado</b> (botón ⚙):<br>${detalle}`);
@@ -3052,6 +3108,12 @@ async function abrirEditarInsumo(id) {
   document.getElementById('ins-ed-buscar').value = '';
   document.getElementById('ins-ed-admin').classList.toggle('oculto', !USUARIO_ACTUAL || USUARIO_ACTUAL.rol !== 'admin');
   pintarOpcionesUnir('');
+  pintarOpcionesReemplazo('');
+  document.getElementById('ins-ed-rep-buscar').value = '';
+  document.getElementById('ins-ed-rec-buscar').value = '';
+  document.getElementById('ins-ed-rec-cant').value = '';
+  INS_REC_ELEGIDAS = new Set();
+  cargarRecetasParaElegir();
   const uso = document.getElementById('ins-ed-uso');
   uso.textContent = 'Revisando dónde se usa...';
   const f = document.getElementById('insumo-editar-form');
@@ -3080,6 +3142,52 @@ async function terminarEdicionInsumo(msg) {
   renderPrecios(document.getElementById('precios-buscador').value);
   if (msg) alert(msg);
 }
+// ----- recetas: reemplazar este insumo por otro / usarlo en recetas
+let INS_RECETAS = null; // lista de recetas para elegir
+let INS_REC_ELEGIDAS = new Set();
+function pintarOpcionesReemplazo(filtro) {
+  const q = normalizarTexto(filtro || '');
+  const lista = LISTA_INSUMOS.filter(x => !x.es_preparacion && x.id !== INS_ED_ID && (!q || coincideInsumo(x, q))).slice(0, 40);
+  document.getElementById('ins-ed-rep-sel').innerHTML = '<option value="">— Elegí el insumo nuevo —</option>' +
+    lista.map(x => `<option value="${x.id}">${escaparHtml(etiquetaInsumo(x))} · ${escaparHtml(ETIQUETA_INSUMOS[x.subcategoria] || x.subcategoria)}</option>`).join('');
+}
+async function cargarRecetasParaElegir() {
+  if (!INS_RECETAS) {
+    const { data } = await sb.from('recetas').select('id,nombre_producto,categoria_carta,tipo').order('nombre_producto');
+    INS_RECETAS = data || [];
+  }
+  pintarRecetasElegir(document.getElementById('ins-ed-rec-buscar').value);
+}
+function pintarRecetasElegir(filtro) {
+  const q = normalizarTexto(filtro || '');
+  const lista = (INS_RECETAS || []).filter(r => !q || normalizarTexto(r.nombre_producto).includes(q)).slice(0, 80);
+  const cont = document.getElementById('ins-ed-rec-lista');
+  cont.innerHTML = lista.map(r => `<label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;margin:2px 0"><input type="checkbox" class="ins-ed-rec-chk" value="${r.id}" style="width:auto;margin:0"${INS_REC_ELEGIDAS.has(r.id) ? ' checked' : ''}> ${escaparHtml(r.nombre_producto)} <span class="sub">${escaparHtml(r.tipo === 'preparacion' ? 'preparación' : (r.categoria_carta || ''))}</span></label>`).join('') || '<div class="aviso">No hay recetas que coincidan.</div>';
+  cont.querySelectorAll('.ins-ed-rec-chk').forEach(c => { c.onchange = () => { if (c.checked) INS_REC_ELEGIDAS.add(c.value); else INS_REC_ELEGIDAS.delete(c.value); }; });
+}
+document.getElementById('ins-ed-rep-buscar').addEventListener('input', (e) => pintarOpcionesReemplazo(e.target.value));
+document.getElementById('ins-ed-rec-buscar').addEventListener('input', (e) => pintarRecetasElegir(e.target.value));
+document.getElementById('btn-ins-ed-rep').onclick = async () => {
+  const res = document.getElementById('ins-ed-resultado');
+  const nuevo = document.getElementById('ins-ed-rep-sel').value;
+  if (!nuevo) { res.innerHTML = '<div class="estado-box estado-error">Elegí el insumo que lo reemplaza.</div>'; return; }
+  const a = LISTA_INSUMOS.find(x => x.id === INS_ED_ID), b = LISTA_INSUMOS.find(x => x.id === nuevo);
+  if (!confirm(`En todas las recetas donde se usa "${etiquetaInsumo(a)}", se va a usar "${etiquetaInsumo(b)}" (con las mismas cantidades). ¿Seguro?`)) return;
+  const { data, error } = await sb.rpc('insumo_reemplazar_en_recetas', { p_viejo: INS_ED_ID, p_nuevo: nuevo });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  await terminarEdicionInsumo(data.recetas ? `Listo: ${data.recetas} ${data.recetas === 1 ? 'receta pasó' : 'recetas pasaron'} a usar "${etiquetaInsumo(b)}" y se recalculó el costo.` : 'Ese insumo no se usaba en ninguna receta.');
+};
+document.getElementById('btn-ins-ed-rec').onclick = async () => {
+  const res = document.getElementById('ins-ed-resultado');
+  const cant = Number(document.getElementById('ins-ed-rec-cant').value);
+  if (!INS_REC_ELEGIDAS.size) { res.innerHTML = '<div class="estado-box estado-error">Elegí al menos una receta.</div>'; return; }
+  if (!(cant > 0)) { res.innerHTML = '<div class="estado-box estado-error">Poné la cantidad que lleva cada receta.</div>'; return; }
+  const { data, error } = await sb.rpc('insumo_usar_en_recetas', { p_insumo: INS_ED_ID, p_recetas: [...INS_REC_ELEGIDAS], p_cantidad: cant, p_medida: document.getElementById('ins-ed-rec-med').value });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  INS_REC_ELEGIDAS = new Set();
+  await terminarEdicionInsumo(`Listo: se sumó a ${data.agregado_en} ${data.agregado_en === 1 ? 'receta' : 'recetas'}${data.ya_estaba_en ? ` (en ${data.ya_estaba_en} ya estaba)` : ''} y se recalculó el costo.`);
+};
+
 document.getElementById('ins-ed-buscar').addEventListener('input', (e) => pintarOpcionesUnir(e.target.value));
 document.getElementById('btn-ins-ed-cancelar').onclick = () => document.getElementById('insumo-editar-form').classList.add('oculto');
 document.getElementById('btn-ins-ed-guardar').onclick = async () => {
