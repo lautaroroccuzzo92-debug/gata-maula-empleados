@@ -19,7 +19,7 @@ Cada producto de la factura (de las categorías que llevan stock) muestra con qu
 Al confirmar: se actualizan los precios de costo y se suma la mercadería al stock, y se registra el gasto. La pantalla de resultado avisa si quedaron productos sin mínimo de stock y si alguna línea no se lleva en stock.
 
 2) DESPERDICIO (todos) — [[ir:desperdicio]]
-Para anotar mercadería que se tiró o se perdió. Se elige el Insumo (escribir para buscarlo), la Cantidad, el Motivo (ej. se venció, se rompió) y la Fecha, y se toca "Guardar desperdicio". Eso descuenta la cantidad del stock.
+Para anotar mercadería que se tiró o se perdió. Admin y encargado ven abajo el desplegable "📉 Historial de desperdicios por mes" (total de cada mes, lo que más pesó y los motivos). Se elige el Insumo (escribir para buscarlo), la Cantidad, el Motivo (ej. se venció, se rompió) y la Fecha, y se toca "Guardar desperdicio". Eso descuenta la cantidad del stock.
 
 3) STOCK (todos) — [[ir:stock]]
 Lista de todos los insumos agrupados por categoría (vermut, cerveza y sin alcohol, fiambres, quesos, kutsi, cocina, panes, limpieza, descartables). Cada categoría es un desplegable: tocarla para abrirla. Arriba hay un buscador ("Buscar insumo...").

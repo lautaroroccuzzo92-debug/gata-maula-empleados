@@ -406,6 +406,10 @@
     <button class="big" id="btn-guardar-desperdicio">Guardar desperdicio</button>
     <button class="secundario" id="btn-cancelar-desperdicio">Volver</button>
     <div id="desp-resultado"></div>
+    <details class="grupo-stock oculto" id="desp-historial-det" style="margin-top:14px">
+      <summary><span>📉 Historial de desperdicios por mes</span></summary>
+      <div class="grupo-stock-body" id="desp-historial">Cargando...</div>
+    </details>
   </div>
 
   <!-- PANTALLA: RECETAS -->
@@ -1816,15 +1820,34 @@ function aplicarConfigDesdeLink() {
 }
 
 // ---------- Desperdicio ----------
+// ---------- Historial de desperdicios por mes (admin y encargado) ----------
+async function cargarHistorialDesperdicios() {
+  const det = document.getElementById('desp-historial-det'), cont = document.getElementById('desp-historial');
+  const puede = USUARIO_ACTUAL && ['admin', 'encargado'].includes(USUARIO_ACTUAL.rol);
+  det.classList.toggle('oculto', !puede);
+  if (!puede) return;
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await sb.rpc('desperdicios_historial');
+  if (error) { cont.innerHTML = `<div class="aviso">${escaparHtml(error.message)}</div>`; return; }
+  if (!data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay desperdicios cargados.</div>'; return; }
+  cont.innerHTML = '<div class="aviso" style="margin-top:0">El total de cada mes es el que usa el estado de resultados: si el mes tiene un total cargado a mano (de tus planillas), ese manda; si no, se suma lo cargado en la app.</div>' +
+    data.map(m => {
+      const det = (m.top_insumos || []).length ? `<div class="sub"><b>Lo que más pesó:</b> ${m.top_insumos.map(x => escaparHtml(x.insumo) + ' ' + fmtPesos(x.valor)).join(' · ')}</div>` : '';
+      const mot = (m.top_motivos || []).length ? `<div class="sub"><b>Motivos:</b> ${m.top_motivos.map(x => escaparHtml(x.motivo) + ' ' + fmtPesos(x.valor)).join(' · ')}</div>` : '';
+      const origen = m.manual != null ? 'total cargado a mano' + (m.app ? ` · en la app hay ${fmtPesos(m.app)} (${m.registros} registros)` : '') : `${m.registros} registros en la app`;
+      return `<div class="lista-item"><div><div class="nombre">${etiquetaMes(m.mes)}</div><div class="sub">${origen}</div>${det}${mot}</div><div class="nombre">${fmtPesos(m.total)}</div></div>`;
+    }).join('');
+}
 document.getElementById('btn-nav-desperdicio').onclick = async () => {
   await cargarInsumos();
   document.getElementById('desp-insumo-input').value = '';
   document.getElementById('desp-insumo-id').value = '';
   document.getElementById('desp-cantidad').value = '';
   document.getElementById('desp-motivo').value = '';
-  document.getElementById('desp-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('desp-fecha').value = isoDeFecha(new Date());
   document.getElementById('desp-resultado').innerHTML = '';
   mostrarPantalla('desperdicio');
+  cargarHistorialDesperdicios();
 };
 document.getElementById('btn-cancelar-desperdicio').onclick = () => mostrarPantalla('home');
 
