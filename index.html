@@ -397,7 +397,11 @@
       <input type="hidden" id="desp-insumo-id">
       <div id="desp-sugerencias" class="oculto" style="margin-top:6px"></div>
       <label>Cantidad</label>
-      <input type="number" step="0.01" id="desp-cantidad">
+      <div style="display:flex;gap:8px">
+        <input type="number" step="0.01" id="desp-cantidad" style="flex:1">
+        <select id="desp-unidad" style="width:110px"><option value="kg">kg</option><option value="gr">gr</option><option value="unidad">unidades</option></select>
+      </div>
+      <div class="sub" id="desp-unidad-ayuda" style="margin-top:4px">Elegí el insumo y después si lo tiraste en kg o en gramos.</div>
       <label>Motivo</label>
       <textarea id="desp-motivo" placeholder="Ej: se venció, se rompió, control de calidad..."></textarea>
       <label>Fecha</label>
@@ -406,6 +410,18 @@
     <button class="big" id="btn-guardar-desperdicio">Guardar desperdicio</button>
     <button class="secundario" id="btn-cancelar-desperdicio">Volver</button>
     <div id="desp-resultado"></div>
+    <details class="grupo-stock oculto" id="desp-producto-det" style="margin-top:14px">
+      <summary><span>📊 Desperdicio por producto</span></summary>
+      <div class="grupo-stock-body">
+        <div class="aviso" style="margin-top:0">Por cada producto: lo que se tiró, cuánto vale y qué porcentaje es de lo que ingresó por factura en las mismas fechas.</div>
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+          <div style="flex:1;min-width:130px"><label style="margin-top:0">Desde</label><input type="date" id="desp-prod-desde"></div>
+          <div style="flex:1;min-width:130px"><label style="margin-top:0">Hasta</label><input type="date" id="desp-prod-hasta"></div>
+          <button class="big" id="btn-desp-producto" style="flex:0 0 auto;width:auto;padding:12px 18px;margin:0">Ver</button>
+        </div>
+        <div id="desp-producto" style="margin-top:10px"></div>
+      </div>
+    </details>
     <details class="grupo-stock oculto" id="desp-historial-det" style="margin-top:14px">
       <summary><span>📉 Historial de desperdicios por mes</span></summary>
       <div class="grupo-stock-body" id="desp-historial">Cargando...</div>
@@ -1773,6 +1789,42 @@ async function cargarHistorialDesperdicios() {
       return `<div class="lista-item"><div><div class="nombre">${etiquetaMes(m.mes)}</div><div class="sub">${origen}</div>${det}${mot}</div><div class="nombre">${fmtPesos(m.total)}</div></div>`;
     }).join('');
 }
+// Cantidad con su unidad: los kg que son menos de 1 se muestran en gramos
+function fmtCantidadDesp(cant, unidad) {
+  const n = Number(cant) || 0;
+  if (unidad === 'unidad') return n.toLocaleString('es-AR', { maximumFractionDigits: 2 }) + (n === 1 ? ' unidad' : ' unidades');
+  if (n < 1) return Math.round(n * 1000).toLocaleString('es-AR') + ' gr';
+  return n.toLocaleString('es-AR', { maximumFractionDigits: 2 }) + ' kg';
+}
+async function cargarDesperdicioPorProducto() {
+  const cont = document.getElementById('desp-producto');
+  const desde = document.getElementById('desp-prod-desde').value, hasta = document.getElementById('desp-prod-hasta').value;
+  if (!desde || !hasta || desde > hasta) { cont.innerHTML = '<div class="aviso">Elegí las fechas (desde no puede ser después de hasta).</div>'; return; }
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await sb.rpc('desperdicios_por_producto', { p_desde: desde, p_hasta: hasta });
+  if (error) { cont.innerHTML = `<div class="aviso">${escaparHtml(error.message)}</div>`; return; }
+  if (!data.length) { cont.innerHTML = '<div class="aviso">No hay desperdicios cargados en esas fechas.</div>'; return; }
+  const total = data.reduce((s, p) => s + Number(p.valor || 0), 0);
+  cont.innerHTML = `<div class="lista-item"><div class="nombre">Total tirado en el período</div><div class="nombre">${fmtPesos(total)}</div></div>` +
+    data.map(p => {
+      const pct = p.porcentaje != null ? `<b>${Number(p.porcentaje).toLocaleString('es-AR')}%</b> de lo que ingresó (${fmtCantidadDesp(p.ingresado, p.unidad)})` : 'No ingresó nada por factura en estas fechas, no se puede calcular el porcentaje';
+      const det = (p.detalle || []).map(x => `${x.fecha.split('-').reverse().slice(0, 2).join('/')}: ${fmtCantidadDesp(x.cantidad, p.unidad)}${x.motivo ? ' (' + escaparHtml(x.motivo) + ')' : ''}`).join(' · ');
+      return `<div class="lista-item"><div><div class="nombre">${escaparHtml(p.insumo)}</div>
+        <div class="sub">Tiraste ${fmtCantidadDesp(p.cantidad, p.unidad)} · ${p.registros} ${p.registros === 1 ? 'vez' : 'veces'}</div>
+        <div class="sub">${pct}</div><div class="sub">${det}</div></div><div class="nombre">${fmtPesos(p.valor)}</div></div>`;
+    }).join('');
+}
+document.getElementById('btn-desp-producto').onclick = cargarDesperdicioPorProducto;
+
+// Segun el insumo elegido: kg o gr (los que se miden en kg) o unidades
+function ajustarUnidadDesperdicio() {
+  const ins = LISTA_INSUMOS.find(i => i.id === document.getElementById('desp-insumo-id').value);
+  const sel = document.getElementById('desp-unidad'), ayuda = document.getElementById('desp-unidad-ayuda');
+  const porUnidad = ins && ins.unidad_medida === 'unidad';
+  [...sel.options].forEach(o => { o.hidden = o.disabled = porUnidad ? o.value !== 'unidad' : o.value === 'unidad'; });
+  sel.value = porUnidad ? 'unidad' : 'kg';
+  ayuda.textContent = !ins ? 'Elegí el insumo y después si lo tiraste en kg o en gramos.' : (porUnidad ? 'Este producto se cuenta por unidades.' : 'Si tiraste poco, elegí gr (ej. 50 gr).');
+}
 document.getElementById('btn-nav-desperdicio').onclick = async () => {
   await cargarInsumos();
   document.getElementById('desp-insumo-input').value = '';
@@ -1781,6 +1833,12 @@ document.getElementById('btn-nav-desperdicio').onclick = async () => {
   document.getElementById('desp-motivo').value = '';
   document.getElementById('desp-fecha').value = isoDeFecha(new Date());
   document.getElementById('desp-resultado').innerHTML = '';
+  ajustarUnidadDesperdicio();
+  const hoy = new Date();
+  document.getElementById('desp-prod-desde').value = isoDeFecha(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  document.getElementById('desp-prod-hasta').value = isoDeFecha(hoy);
+  document.getElementById('desp-producto').innerHTML = '';
+  document.getElementById('desp-producto-det').classList.toggle('oculto', !(USUARIO_ACTUAL && ['admin', 'encargado'].includes(USUARIO_ACTUAL.rol)));
   mostrarPantalla('desperdicio');
   cargarHistorialDesperdicios();
 };
@@ -1790,6 +1848,7 @@ document.getElementById('desp-insumo-input').addEventListener('input', (e) => {
   const texto = normalizarTexto(e.target.value.trim());
   const cont = document.getElementById('desp-sugerencias');
   document.getElementById('desp-insumo-id').value = '';
+  ajustarUnidadDesperdicio();
   if (!texto) { cont.classList.add('oculto'); return; }
   const coincidencias = LISTA_INSUMOS.filter(i => !i.es_preparacion && coincideInsumo(i, texto)).slice(0, 8);
   if (!coincidencias.length) { cont.classList.add('oculto'); return; }
@@ -1799,6 +1858,7 @@ document.getElementById('desp-insumo-input').addEventListener('input', (e) => {
     btn.onclick = () => {
       document.getElementById('desp-insumo-input').value = btn.textContent;
       document.getElementById('desp-insumo-id').value = btn.dataset.id;
+      ajustarUnidadDesperdicio();
       cont.classList.add('oculto');
     };
   });
@@ -1806,7 +1866,7 @@ document.getElementById('desp-insumo-input').addEventListener('input', (e) => {
 
 document.getElementById('btn-guardar-desperdicio').onclick = async () => {
   const insumoId = document.getElementById('desp-insumo-id').value;
-  const cantidad = Number(document.getElementById('desp-cantidad').value || 0);
+  const cantidad = Number(document.getElementById('desp-cantidad').value || 0) / (document.getElementById('desp-unidad').value === 'gr' ? 1000 : 1);
   const motivo = document.getElementById('desp-motivo').value.trim();
   const fecha = document.getElementById('desp-fecha').value;
   const resDiv = document.getElementById('desp-resultado');

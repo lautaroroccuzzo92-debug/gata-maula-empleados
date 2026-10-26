@@ -234,6 +234,52 @@ const HERRAMIENTAS = [
     }
   },
   {
+    roles: ['admin', 'encargado'],
+    def: {
+      name: 'desperdicio_por_producto',
+      description: 'Desperdicio por producto en un rango de fechas: cuánto se tiró (kg o unidades), su valor en pesos, cuánto ingresó por factura en el mismo rango y el porcentaje tirado sobre lo ingresado, con el detalle de cada vez. Usala para "cuánto se tiró de X" o "qué porcentaje se desperdicia de X". Las cantidades en kg vienen en kg (0,05 = 50 gr).',
+      input_schema: { type: 'object', properties: { ...FECHAS, buscar: { type: 'string', description: 'Texto del producto (opcional)' } }, required: ['desde', 'hasta'] }
+    },
+    async run(ctx, a) {
+      const { data, error } = await ctx.sb.rpc('desperdicios_por_producto', { p_desde: a.desde, p_hasta: a.hasta });
+      if (error) throw new Error(error.message);
+      let l = data;
+      if (a.buscar) { const q = a.buscar.toLowerCase(); l = l.filter(x => x.insumo.toLowerCase().includes(q)); }
+      return { total_pesos: redondear(l.reduce((s, x) => s + Number(x.valor || 0), 0)), productos: l.slice(0, 40) };
+    }
+  },
+  {
+    roles: ['admin', 'encargado'],
+    def: {
+      name: 'compras_del_periodo',
+      description: 'Compras (mercadería que ingresó por factura) en un rango de fechas: cantidad por producto y, solo para el administrador, el total gastado por concepto (PAN, COCINA, VERMUT, FIAMBRES Y QUESOS, BEBIDA SIN ALCOHOL, INSUMOS DE LIMPIEZA, DESCARTABLES, VERDULERIA, etc.). Usala para "cuánto compramos de pan en octubre". Filtrá por categoría (fiambres, quesos, vermut, cerveza y sin alcohol, kutsi, cocina, panes, limpieza, descartables) o por texto.',
+      input_schema: { type: 'object', properties: { ...FECHAS, categoria: { type: 'string' }, buscar: { type: 'string' } }, required: ['desde', 'hasta'] }
+    },
+    async run(ctx, a) {
+      const filas = await traer(() => ctx.sb.from('movimientos_stock').select('cantidad,fecha,insumos(nombre,marca,subcategoria,unidad_medida)')
+        .eq('tipo', 'ingreso').eq('origen', 'factura')
+        .gte('fecha', a.desde + 'T00:00:00-03:00').lte('fecha', a.hasta + 'T23:59:59-03:00').order('fecha').order('id'));
+      const por = {};
+      filas.forEach(f => {
+        const i = f.insumos || {};
+        const nombre = [i.marca, i.nombre].filter(Boolean).join(' ');
+        if (a.categoria && i.subcategoria !== a.categoria) return;
+        if (a.buscar && !nombre.toLowerCase().includes(a.buscar.toLowerCase())) return;
+        const p = por[nombre] = por[nombre] || { producto: nombre, categoria: i.subcategoria, unidad: i.unidad_medida === 'unidad' ? 'unidades' : 'kg', cantidad: 0, ingresos: 0 };
+        p.cantidad += Number(f.cantidad); p.ingresos++;
+      });
+      const productos = Object.values(por).map(p => ({ ...p, cantidad: redondear(p.cantidad, 2) })).sort((x, y) => y.cantidad - x.cantidad);
+      const res = { aclaracion: 'Cantidades de lo que entró por factura al stock; no incluye productos sin seguimiento de stock (ej. verdulería).', productos: productos.slice(0, 60) };
+      if (ctx.usuario.rol === 'admin') {
+        const eg = await traer(() => ctx.sb.from('ingresos_egresos').select('concepto,monto,forma').gte('fecha', a.desde).lte('fecha', a.hasta).in('forma', ['deuda_proveedores', 'egreso_banco', 'egreso_efectivo']).order('fecha').order('id'));
+        const conc = {};
+        eg.forEach(e => { const c = e.concepto || 'sin concepto'; conc[c] = (conc[c] || 0) + Number(e.monto || 0); });
+        res.total_gastado_por_concepto = Object.fromEntries(Object.entries(conc).sort((x, y) => y[1] - x[1]).map(([k, v]) => [k, redondear(v)]));
+      }
+      return res;
+    }
+  },
+  {
     roles: ['admin'],
     def: {
       name: 'resultados_mensuales',
