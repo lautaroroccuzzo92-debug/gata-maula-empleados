@@ -7,6 +7,7 @@ export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'r
 export const GUIA = `GUÍA DE LA APP (lo único que existe; no inventes pantallas ni botones que no estén acá)
 
 Entrada: se entra con usuario y contraseña (cada persona tiene la suya). Arriba a la izquierda está "🔓 Salir" y arriba a la derecha "⚙️" (ajustes). Después del ingreso se ve la pantalla de inicio con botones. Cada pantalla tiene un botón "Volver" abajo.
+Las listas largas (stock, pedidos, calendario de pagos, lotes de producción, últimos cierres, alertas, etc.) vienen plegadas: se tocan para desplegar y muestran la cantidad en el título.
 Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Recetas (sin precios; puede crear y editar las suyas), Producción y vencimientos, Desperdicio, Stock y Pedidos.
 
 1) REGISTRAR MERCADERÍA (admin y encargado) — [[ir:mercaderia]]
@@ -61,7 +62,7 @@ Para ver el análisis se eligen las fechas Desde y Hasta y se toca "Ver análisi
 11c) PRODUCCIÓN Y VENCIMIENTOS (todos) — [[ir:produccion]]
 Controla lo que cocina elabora (mayo de chimi, pesto, escabeches, etc.): cuándo se hizo, cuánto, cuándo vence y cuánta merma hubo. El botón Producción del inicio muestra un numerito rojo con los lotes vencidos o por vencer.
 Pestañas: "Activos" (lotes en curso, ordenados por lo que vence primero), "Terminados" (historial), "Merma" (reporte) y "Catálogo" (solo admin y encargado).
-- Cargar un lote: en "Activos" tocar "+ Nuevo lote". Pasos: 1) elegir el producto de la lista; 2) poner la fecha de elaboración (por defecto hoy); 3) poner la vida útil en días (aparece sugerida según el producto, pero se puede cambiar); la app muestra sola la fecha de vencimiento (elaboración + vida útil); 4) elegir en qué se carga la cantidad (Kilos, Gramos o Unidades; viene sugerido según el producto y se puede cambiar en cada lote) y poner cuánto se elaboró; 5) si hubo que tirar algo, poner la merma y el motivo (si no, dejarla vacía); 6) quién lo produce y observaciones si hace falta. Guardar lote.
+- Cargar un lote: en "Activos" tocar "+ Nuevo lote". Pasos: 1) elegir el producto de la lista (si no está, elegir "➕ Otro producto (nuevo)..." y escribir el nombre, por ejemplo Arroz: queda guardado para la próxima vez); 2) poner la fecha de elaboración (por defecto hoy); 3) poner la vida útil en días (aparece sugerida según el producto, pero se puede cambiar); la app muestra sola la fecha de vencimiento (elaboración + vida útil); 4) elegir en qué se carga la cantidad (Kilos, Gramos o Unidades; viene sugerido según el producto y se puede cambiar en cada lote) y poner cuánto se elaboró; 5) si hubo que tirar algo, poner la merma y el motivo (si no, dejarla vacía); 6) quién lo produce y observaciones si hace falta. Guardar lote.
 - Estados: 🟢 ACTIVO (vigente), ⚠️ POR VENCER (faltan 2 días o menos), 🔴 VENCIDO (hay que retirarlo y registrar la merma).
 - Corregir un lote activo (cantidad, vida útil, merma, etc.): botón "Editar" del lote.
 - Terminar un lote (cuando se usó todo o se tiró lo que quedaba): botón "Terminar lote", poner cuánto se tiró (0 si se usó todo) y el motivo. Al terminarlo deja de dar alertas y pasa a "Terminados". La merma de los productos vinculados a una receta se suma sola a los desperdicios, así que no hace falta cargarla de nuevo en Desperdicio.

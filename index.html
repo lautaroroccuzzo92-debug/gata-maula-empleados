@@ -497,15 +497,19 @@
     <button class="big" id="btn-guardar-caja">Guardar cierre</button>
     <button class="secundario" id="btn-cancelar-caja">Volver</button>
     <div id="caja-resultado"></div>
-    <h3 style="margin:16px 0 4px">Últimos cierres</h3>
-    <div class="aviso" style="margin-top:0">Cada cierre guarda quién lo cargó y, si se corrigió, quién lo modificó.</div>
-    <div id="caja-lista-cierres"></div>
+    <details class="grupo-stock" style="margin-top:14px">
+      <summary><span>Últimos cierres <span class="grupo-cant">(quién cargó cada uno)</span></span></summary>
+      <div class="grupo-stock-body"><div id="caja-lista-cierres"></div></div>
+    </details>
   </div>
 
   <!-- PANTALLA: INGRESOS / EGRESOS -->
   <div id="pantalla-ingresos" class="oculto">
     <h2 class="section-title" style="margin-top:0">Ingresos / Egresos</h2>
-    <div id="ingresos-lista"></div>
+    <details class="grupo-stock">
+      <summary><span>Últimos movimientos <span class="grupo-cant">(30)</span></span></summary>
+      <div class="grupo-stock-body"><div id="ingresos-lista"></div></div>
+    </details>
     <button class="agregar-producto" id="btn-nuevo-ingreso-egreso">+ Cargar movimiento</button>
     <button class="agregar-producto" id="btn-nueva-nc" type="button">↩️ Cargar nota de crédito de un proveedor</button>
     <div id="nc-form" class="oculto">
@@ -690,6 +694,7 @@
         <h3 id="prod-lote-titulo" style="margin:0 0 6px">Nuevo lote</h3>
         <label style="margin-top:0">Producto</label>
         <select id="prod-lote-item"></select>
+        <div id="prod-lote-nuevo-wrap" class="oculto"><label>Nombre del producto nuevo</label><input type="text" id="prod-lote-nuevo-nombre" placeholder="Ej: Arroz"><div class="aviso" style="margin-top:2px">Queda guardado en la lista de productos para la próxima vez.</div></div>
         <div class="fila2">
           <div><label>Fecha de elaboración</label><input type="date" id="prod-lote-fecha"></div>
           <div><label>Vida útil (días)</label><input type="number" min="1" step="1" id="prod-lote-vida-dias"></div>
@@ -871,11 +876,17 @@
   <!-- PANTALLA: ALERTAS -->
   <div id="pantalla-alertas" class="oculto">
     <h2 class="section-title" style="margin-top:0">Alertas</h2>
-    <h2 class="section-title">Aumentos de más de 7%</h2>
-    <div class="aviso">Hablá con el proveedor y después tocá "Ya lo hablé" para sacar la alerta.</div>
-    <div id="alertas-aumentos"></div>
-    <h2 class="section-title">Platos con margen bajo (menos de 65%)</h2>
-    <div id="alertas-margen"></div>
+    <details class="grupo-stock">
+      <summary><span>Aumentos de más de 7% <span class="grupo-cant" id="alertas-aumentos-n"></span></span></summary>
+      <div class="grupo-stock-body">
+        <div class="aviso" style="margin-top:0">Hablá con el proveedor y después tocá "Ya lo hablé" para sacar la alerta.</div>
+        <div id="alertas-aumentos"></div>
+      </div>
+    </details>
+    <details class="grupo-stock">
+      <summary><span>Platos con margen bajo (menos de 65%) <span class="grupo-cant" id="alertas-margen-n"></span></span></summary>
+      <div class="grupo-stock-body"><div id="alertas-margen"></div></div>
+    </details>
     <button class="secundario" id="btn-volver-alertas">Volver</button>
   </div>
 
@@ -1904,7 +1915,7 @@ function renderStockLista(filtro) {
   const hayFiltro = !!texto;
   const puedeCfg = USUARIO_ACTUAL && ['admin', 'encargado'].includes(USUARIO_ACTUAL.rol);
   const sinMin = filtrado.filter(s => !(Number(s.stock_minimo) > 0)).sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
-  const bloqueSinMin = (puedeCfg && sinMin.length) ? `<details class="grupo-stock"${sinMin.length <= 15 || hayFiltro ? ' open' : ''}>
+  const bloqueSinMin = (puedeCfg && sinMin.length) ? `<details class="grupo-stock"${hayFiltro ? ' open' : ''}>
       <summary><span>Sin mínimo cargado <span class="grupo-cant">(${sinMin.length}) · tocá ⚙ para cargarlo</span></span></summary>
       <div class="grupo-stock-body">${sinMin.map(s => `<div class="lista-item"><div><div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div><div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}${ETIQUETA_SUBCATEGORIA[s.insumos?.subcategoria] || s.insumos?.subcategoria || ''}</div></div>
         <button type="button" class="secundario btn-config-pedido" data-id="${s.insumo_id}" title="Mínimo y datos de pedido" style="width:auto;padding:6px 10px;margin:0">⚙</button></div>`).join('')}</div>
@@ -2112,7 +2123,7 @@ function renderProdActivos() {
   document.getElementById('prod-resumen').innerHTML = `<b>${PROD_LOTES.length}</b> lotes activos · <span class="${venc ? 'bajo-minimo' : ''}">🔴 ${venc} vencidos</span> · <span class="${pronto ? 'bajo-minimo' : ''}">🟡 ${pronto} por vencer</span>`;
   const cont = document.getElementById('prod-lista-activos');
   if (!PROD_LOTES.length) { cont.innerHTML = '<div class="aviso">No hay lotes activos. Tocá "+ Nuevo lote" cuando elaboren algo.</div>'; return; }
-  cont.innerHTML = PROD_LOTES.map(l => {
+  const cardHtml = (l) => {
     const e = prodEstadoLote(l);
     const u = prodUni(l.produccion_items?.unidad);
     return `<div class="card" style="padding:10px;margin:8px 0">
@@ -2126,7 +2137,11 @@ function renderProdActivos() {
         <button type="button" class="secundario prod-editar" data-id="${l.id}" style="margin:0;flex:1">Editar</button>
         <button type="button" class="big prod-cerrar" data-id="${l.id}" style="margin:0;flex:1">Terminar lote</button>
       </div></div>`;
-  }).join('');
+  };
+  const g = { venc: [], pronto: [], ok: [] };
+  PROD_LOTES.forEach(l => { const d = prodDiasHasta(l.vence_el); (d < 0 ? g.venc : (d <= PROD_ALERTA_DIAS ? g.pronto : g.ok)).push(l); });
+  cont.innerHTML = [['🔴 Vencidos', g.venc], ['🟡 Por vencer', g.pronto], ['🟢 Activos', g.ok]].filter(x => x[1].length)
+    .map(([t, arr]) => `<details class="grupo-stock"><summary><span>${t} <span class="grupo-cant">(${arr.length})</span></span></summary><div class="grupo-stock-body">${arr.map(cardHtml).join('')}</div></details>`).join('');
   cont.querySelectorAll('.prod-editar').forEach(b => { b.onclick = () => abrirFormLote(PROD_LOTES.find(l => l.id === b.dataset.id)); });
   cont.querySelectorAll('.prod-cerrar').forEach(b => { b.onclick = () => abrirCierreLote(PROD_LOTES.find(l => l.id === b.dataset.id)); });
 }
@@ -2146,6 +2161,8 @@ function prodEtiquetaUnidadSel() {
   document.getElementById('prod-lote-unidad2').textContent = u;
 }
 function prodElegirItem() {
+  const nuevo = document.getElementById('prod-lote-item').value === '__nuevo__';
+  document.getElementById('prod-lote-nuevo-wrap').classList.toggle('oculto', !nuevo);
   const item = prodItemElegido();
   // la unidad viene sugerida según el producto, pero se puede cambiar en cada lote
   if (item && !PROD_EDIT_ID) document.getElementById('prod-lote-unidad-sel').value = item.unidad === 'unidad' ? 'unidad' : 'kg';
@@ -2158,7 +2175,9 @@ function abrirFormLote(lote) {
   document.getElementById('prod-form-cierre').classList.add('oculto');
   const sel = document.getElementById('prod-lote-item');
   const activos = PROD_ITEMS.filter(i => i.activo || (lote && i.id === lote.item_id));
-  sel.innerHTML = '<option value="">Elegí el producto...</option>' + activos.map(i => `<option value="${i.id}">${escaparHtml(i.nombre)}</option>`).join('');
+  sel.innerHTML = '<option value="">Elegí el producto...</option>' + activos.map(i => `<option value="${i.id}">${escaparHtml(i.nombre)}</option>`).join('') + (lote ? '' : '<option value="__nuevo__">➕ Otro producto (nuevo)...</option>');
+  document.getElementById('prod-lote-nuevo-wrap').classList.add('oculto');
+  document.getElementById('prod-lote-nuevo-nombre').value = '';
   sel.value = lote ? lote.item_id : '';
   sel.disabled = !!lote;
   document.getElementById('prod-lote-titulo').textContent = lote ? 'Modificar lote' : 'Nuevo lote';
@@ -2185,7 +2204,7 @@ document.getElementById('btn-prod-cancelar-lote').onclick = () => document.getEl
 document.getElementById('btn-prod-guardar-lote').onclick = async () => {
   const err = document.getElementById('prod-lote-error');
   err.textContent = '';
-  const itemId = document.getElementById('prod-lote-item').value;
+  let itemId = document.getElementById('prod-lote-item').value;
   const fecha = document.getElementById('prod-lote-fecha').value;
   const vida = Math.round(Number(document.getElementById('prod-lote-vida-dias').value));
   const cant = Number(document.getElementById('prod-lote-cant').value);
@@ -2199,6 +2218,14 @@ document.getElementById('btn-prod-guardar-lote').onclick = async () => {
   if (merma > 0 && !motivo.trim()) { err.textContent = 'Poné el motivo de la merma.'; return; }
   const quien = document.getElementById('prod-lote-quien').value, obs = document.getElementById('prod-lote-obs').value;
   const btn = document.getElementById('btn-prod-guardar-lote');
+  btn.disabled = true;
+  if (itemId === '__nuevo__') {
+    const nombreNuevo = document.getElementById('prod-lote-nuevo-nombre').value.trim();
+    if (!nombreNuevo) { btn.disabled = false; err.textContent = 'Escribí el nombre del producto nuevo.'; return; }
+    const { data: nuevo, error: errNuevo } = await sb.rpc('produccion_nuevo_item', { p_nombre: nombreNuevo, p_vida_util: vida, p_unidad: document.getElementById('prod-lote-unidad-sel').value === 'unidad' ? 'unidad' : 'kg' });
+    if (errNuevo) { btn.disabled = false; err.textContent = errNuevo.message; return; }
+    itemId = nuevo.id;
+  }
   btn.disabled = true;
   const { error } = PROD_EDIT_ID
     ? await sb.rpc('produccion_editar_lote', { p_id: PROD_EDIT_ID, p_elaborado: fecha, p_vida_util: vida, p_cantidad: cant, p_producido_por: quien, p_merma: merma, p_motivo: motivo, p_obs: obs, p_unidad: document.getElementById('prod-lote-unidad-sel').value })
@@ -2311,7 +2338,7 @@ function renderProdCatalogo() {
   prodCargarInsumosPrep().then(() => {
     cont.innerHTML = PROD_ITEMS.map(i => {
       const prep = PROD_INSUMOS_PREP.find(p => p.id === i.insumo_id);
-      return `<div class="lista-item"><div><div class="nombre">${escaparHtml(i.nombre)}${i.activo ? '' : ' <span class="sub">(inactivo)</span>'}</div>
+      return `<div class="lista-item"><div><div class="nombre">${escaparHtml(i.nombre)}${i.activo ? '' : ' <span class="sub">(inactivo)</span>'}${i.creado_por_cocina ? ' <span class="sub">🆕 agregado por cocina</span>' : ''}</div>
         <div class="sub">Vida útil sugerida: ${i.vida_util_dias} ${i.vida_util_dias === 1 ? 'día' : 'días'} · ${i.unidad === 'unidad' ? 'unidades' : 'kg'} · ${prep ? 'merma valorizada con: ' + escaparHtml(prep.nombre) : 'sin vincular a Recetas'}</div></div>
         <button type="button" class="secundario prod-item-editar" data-id="${i.id}" style="width:auto;margin:0;padding:6px 12px">Editar</button></div>`;
     }).join('') || '<div class="aviso">No hay productos.</div>';
@@ -2607,7 +2634,7 @@ async function verAnalisisVentas() {
   if (a.error) { cont.innerHTML = `<div class="estado-box estado-error">${a.error.message}</div>`; return; }
   const d = a.data, r = d.resumen;
   if (!r.tickets) { cont.innerHTML = '<div class="aviso">No hay ventas cargadas en esas fechas.</div>'; return; }
-  const sec = (titulo, cuerpo, abierto) => `<details class="grupo-stock"${abierto ? ' open' : ''}><summary><span>${titulo}</span></summary><div class="grupo-stock-body">${cuerpo}</div></details>`;
+  const sec = (titulo, cuerpo, abierto) => `<details class="grupo-stock"><summary><span>${titulo}</span></summary><div class="grupo-stock-body">${cuerpo}</div></details>`;
   const resumen = `<div class="card"><div class="lista-item"><div class="nombre">Ventas</div><div class="nombre">${fmtPesos(r.ventas_total)}</div></div>
     <div class="lista-item"><div class="nombre">Tickets</div><div class="nombre">${r.tickets}</div></div>
     <div class="lista-item"><div class="nombre">Ticket promedio</div><div class="nombre">${fmtPesos(r.ticket_promedio)}</div></div>
@@ -2859,7 +2886,7 @@ async function cargarPedidos() {
         conMinimo.sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || '')).map(s => `<div class="lista-item"><div><div class="nombre">${s.insumos?.nombre || ''}</div><div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}${s.proveedor_pedido || 'sin proveedor'}</div></div><div style="text-align:right;flex:none" class="sub">Hay ${fmtCant(s.cantidad_actual)} ${unidadTxtStock(s)}<br>mínimo ${fmtCant(s.stock_minimo)} ${unidadTxtStock(s)}</div></div>`).join('') + '</details>' : '';
       const sinHtml = sinMinimo.length ? `<div class="aviso">${sinMinimo.length} sin mínimo cargado (se carga en Stock, con el botón ⚙).</div>` : '';
       const cuerpo = (bloquesProv || '<div class="aviso">Nada para pedir en este stock. 👍</div>') + okHtml + sinHtml;
-      return `<details class="grupo-stock"${bajos.length ? ' open' : ''}>
+      return `<details class="grupo-stock">
         <summary><span>Stock de ${titulo.toLowerCase()} <span class="grupo-cant">(${bajos.length ? '<b class="bajo-minimo">' + bajos.length + ' para pedir</b>' : 'todo en orden'})</span></span></summary>
         <div class="grupo-stock-body">${cuerpo}</div>
       </details>`;
@@ -3015,6 +3042,8 @@ async function cargarAlertas() {
         </div>`;
       }).join('');
     }
+    document.getElementById('alertas-aumentos-n').textContent = '(' + contA.querySelectorAll('.alerta-item').length + ')';
+    document.getElementById('alertas-margen-n').textContent = '(' + contM.querySelectorAll('.alerta-item').length + ')';
   } catch (e) {
     contA.innerHTML = `<div class="estado-box estado-error">${e.message}</div>`;
     contM.innerHTML = '';
@@ -3907,7 +3936,7 @@ document.getElementById('btn-nc-guardar').onclick = async () => {
   const aviso = `<div class="estado-box estado-ok">✅ Nota de crédito registrada: ${partes.join(' y ')}. El gasto del mes se redujo en el mismo monto.</div>`;
   document.getElementById('nc-form').classList.add('oculto');
   await cargarListaIngresosEgresos();
-  document.getElementById('ingresos-lista').insertAdjacentHTML('afterbegin', aviso);
+  document.getElementById('ingresos-lista').closest('details').insertAdjacentHTML('beforebegin', aviso);
 };
 
 async function cargarProveedoresPlazo() {
@@ -4456,7 +4485,7 @@ function renderCalendario() {
   };
 
   const html = grupos.filter(g => g[1].length).map(([titulo, items, abierto]) => `
-    <details class="grupo-stock"${abierto ? ' open' : ''}>
+    <details class="grupo-stock">
       <summary><span>${titulo} <span class="grupo-cant">(${items.length} · ${formatoPesos(sumar(items))})</span></span></summary>
       <div class="grupo-stock-body">${items.map(itemHtml).join('')}</div>
     </details>`).join('');
