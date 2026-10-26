@@ -821,6 +821,10 @@
       <button type="button" class="eerr-tab" id="eerr-tab-fin">Estado financiero</button>
     </div>
     <div id="eerr-resumen"></div>
+    <details class="grupo-stock" id="eerr-stock-det">
+      <summary><span>📦 Stock valorizado hoy <span class="grupo-cant" id="eerr-stock-total"></span></span></summary>
+      <div class="grupo-stock-body" id="eerr-stock-cuerpo">Cargando...</div>
+    </details>
     <div id="eerr-tabla"></div>
     <div id="eerr-fin" class="oculto"></div>
     <button class="secundario" id="btn-eerr-datos">Cargar datos del mes (stock, saldos, costo teórico...)</button>
@@ -4093,6 +4097,26 @@ function llenarPeriodosEERR() {
   if (modo === 'mes' && opciones.length > 1) sel.value = opciones[1][0];
 }
 
+// ---------- Stock valorizado (automático, desde el Stock de la app) ----------
+async function cargarStockValorizado() {
+  const cuerpo = document.getElementById('eerr-stock-cuerpo'), tot = document.getElementById('eerr-stock-total');
+  const { data, error } = await sb.rpc('stock_valorizado_actual');
+  if (error) { cuerpo.innerHTML = `<div class="aviso">No pude calcular el stock valorizado: ${escaparHtml(error.message)}</div>`; tot.textContent = ''; return; }
+  tot.textContent = '· ' + formatoPesos(data.total);
+  const rubros = Object.entries(data.por_rubro || {}).sort((a, b) => b[1] - a[1]);
+  const aparte = Object.entries(data.aparte || {});
+  cuerpo.innerHTML = `<div class="aviso" style="margin-top:0">Es la suma de cada producto del Stock × su precio de costo × 1,21 (con IVA, como tu planilla). El mes en curso usa este número como stock final; el stock inicial es la foto de fin del mes anterior.</div>` +
+    rubros.map(([r, v]) => `<div class="lista-item"><div class="nombre">${escaparHtml(ETIQUETA_INSUMOS[r] || r)}</div><div class="nombre">${formatoPesos(v)}</div></div>`).join('') +
+    `<div class="lista-item"><div class="nombre"><b>Total mercadería</b></div><div class="nombre"><b>${formatoPesos(data.total)}</b></div></div>` +
+    (aparte.length ? `<div class="aviso">No incluidos en el total: ${aparte.map(([r, v]) => escaparHtml(ETIQUETA_INSUMOS[r] || r) + ' ' + formatoPesos(v)).join(' · ')}.</div>` : '') +
+    (Number(data.sin_precio) > 0 ? `<div class="aviso" style="color:#b3262d">⚠️ ${data.sin_precio} productos con stock no tienen precio de costo cargado y valen $0 acá. Cargalos en Insumos y precios.</div>` : '') +
+    `<button type="button" class="secundario" id="btn-stock-foto" style="width:auto;margin-top:8px">Guardar la foto de hoy</button> <span class="sub" id="stock-foto-res"></span>`;
+  document.getElementById('btn-stock-foto').onclick = async () => {
+    const r = await sb.rpc('stock_valorizado_foto');
+    document.getElementById('stock-foto-res').textContent = r.error ? r.error.message : '✅ Foto guardada (cuenta como el cierre del mes si es la última del mes).';
+  };
+}
+
 async function datosPeriodoEERR(modo, valor) {
   // devuelve { meses: [{caja, egr, manual, desperdicios}], clavesMeses: ['2026-09', ...] }
   let desde, hasta;
@@ -4102,6 +4126,8 @@ async function datosPeriodoEERR(modo, valor) {
   if (error) throw error;
   const { data: manuales, error: errM } = await sb.from('eerr_manual').select('*').gte('mes', desde).lte('mes', hasta);
   if (errM) throw errM;
+  const svPorMes = {};
+  try { const sv = await sb.rpc('stock_valorizado_eerr', { p_desde: desde, p_hasta: hasta }); (sv.data || []).forEach(x => { svPorMes[x.mes] = x; }); } catch (e) { /* sin stock automático */ }
   const manualPorMes = {};
   (manuales || []).forEach(m => { manualPorMes[m.mes.slice(0, 7)] = m; });
   const porMes = {};
@@ -4115,6 +4141,11 @@ async function datosPeriodoEERR(modo, valor) {
     const man = {};
     const mm = manualPorMes[ym];
     if (mm) CAMPOS_EERR_MANUAL.forEach(([k]) => { if (mm[k] !== null && mm[k] !== undefined) man[k] = Number(mm[k]); });
+    const sv = svPorMes[ym];
+    if (sv) {
+      if (sv.fin !== null && sv.fin !== undefined) { man.stock_fin = Number(sv.fin); man._stock_auto = 1; }
+      if (sv.inicio !== null && sv.inicio !== undefined) { man.stock_inicio = Number(sv.inicio); man._stock_auto = 1; }
+    }
     return {
       caja: { tc: c.tc, td: c.td, tr: c.tr, qp: c.qp, mp: c.mp, efe: c.efe, fiscal: c.fiscal != null ? c.fiscal : null },
       egr, manual: man, desperdicios: b.desperdicios
@@ -4141,6 +4172,7 @@ async function cargarEERR() {
   const resumen = document.getElementById('eerr-resumen');
   tabla.innerHTML = 'Calculando...';
   resumen.innerHTML = '';
+  cargarStockValorizado();
   document.getElementById('eerr-form').classList.add('oculto');
   const modo = document.getElementById('eerr-modo').value;
   const valor = document.getElementById('eerr-periodo').value;

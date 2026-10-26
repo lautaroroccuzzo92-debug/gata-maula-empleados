@@ -103,7 +103,7 @@
     var stockIni = n(man.stock_inicio), stockFin = n(man.stock_fin);
     var dStock = stockFin - stockIni;
     var comprada = cVerm + cSand;
-    add('stock_var', 'STOCK DE MERCADERÍA VS CUENTAS CORRIENTES PROVEEDORES', 'linea', dStock, { nota: 'Stock al inicio: ' + Math.round(stockIni) + ' · al final: ' + Math.round(stockFin), editable: 'stock' });
+    add('stock_var', 'STOCK DE MERCADERÍA VS CUENTAS CORRIENTES PROVEEDORES', 'linea', dStock, { nota: 'Stock al inicio: ' + Math.round(stockIni) + ' · al final: ' + Math.round(stockFin) + (man._stock_auto ? ' · automático desde el stock de la app' : ''), editable: 'stock' });
     add('comprada', 'COSTO DE MERCADERÍA COMPRADA', 'total', comprada);
     var real = comprada - dStock;
     add('real', 'COSTO DE MERCADERÍA REAL', 'total', real, { pct: pct(comprada) - pct(dStock), objetivo: OBJETIVOS.merc_real });
