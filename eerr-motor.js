@@ -196,7 +196,7 @@
     var otrosIE = egFin - totalIngMes;
     add('otros_ie', 'OTROS INGRESOS Y EGRESOS', 'total', otrosIE, { sinPct: true });
     var resFinal = resultado - otrosIE;
-    add('res_final', 'RESULTADO FINAL', 'resultado', resFinal);
+    add('res_final', 'RESULTADO FINAL (criterio de tu planilla)', 'resultado', resFinal);
     add('deuda_prov_gen', 'Deuda con proveedores generada en el mes', 'linea', deudaGen, { sinPct: true });
     add('otras_deudas_gen', 'Otras deudas generadas en el mes', 'linea', otrasDeudasGen, { sinPct: true });
     var resPlata = resFinal + deudaGen + otrasDeudasGen;

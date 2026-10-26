@@ -977,20 +977,9 @@
   <div id="pantalla-config" class="oculto">
     <h2 class="section-title" style="margin-top:0">Ajustes</h2>
     <div class="card">
-      <label style="margin-top:0">API Key de Anthropic</label>
-      <input type="text" id="cfg-apikey" placeholder="sk-ant-...">
-      <div class="aviso">Se guarda solo en este teléfono (localStorage). Nunca se envía a ningún lado salvo al proxy propio.</div>
+      <div class="aviso" style="margin-top:0">No hay nada para configurar en el celular. La lectura de facturas y el asistente usan la clave de la IA guardada en el servidor, así que ya no hace falta cargarla acá.</div>
     </div>
-    <button class="big" id="btn-guardar-config">Guardar</button>
-    <button class="secundario" id="btn-cerrar-config">Volver</button>
-
-    <div class="card" style="margin-top:22px">
-      <h2 class="section-title" style="margin-top:0">Compartir esta configuración</h2>
-      <div class="aviso">Generá un link que ya trae cargada la API Key de Anthropic. Mandaselo por WhatsApp a Manu o Facu: al abrirlo una vez en su celular, no van a tener que escribirla en Ajustes. El usuario y contraseña de cada uno se cargan por separado en el login.</div>
-      <button class="secundario" id="btn-generar-link" style="margin-top:10px">Generar link para compartir</button>
-      <textarea id="link-generado" readonly style="margin-top:8px;font-size:12px;" class="oculto"></textarea>
-      <button class="secundario oculto" id="btn-copiar-link">Copiar link</button>
-    </div>
+    <button class="big" id="btn-cerrar-config">Volver</button>
   </div>
 
 </div>
@@ -1183,14 +1172,9 @@ function irAHome() {
 
 // ---------- Config ----------
 document.getElementById('btn-config').onclick = () => {
-  document.getElementById('cfg-apikey').value = cfg('apikey');
   mostrarPantalla('config');
 };
 document.getElementById('btn-cerrar-config').onclick = () => mostrarPantalla('home');
-document.getElementById('btn-guardar-config').onclick = () => {
-  setCfg('apikey', document.getElementById('cfg-apikey').value.trim());
-  mostrarPantalla('home');
-};
 
 // ---------- Captura de imágenes ----------
 function agregarArchivoBase64(mediaType, base64, previewUrl) {
@@ -1333,17 +1317,13 @@ zonaPegado.addEventListener('paste', async (e) => {
 
 // ---------- Analizar con IA ----------
 document.getElementById('btn-analizar').onclick = async () => {
-  const apikey = cfg('apikey');
-  if (!apikey) {
-    alert('Primero cargá tu API Key de Anthropic en Ajustes ⚙️');
-    return mostrarPantalla('config');
-  }
   mostrarPantalla('cargando');
   document.getElementById('texto-cargando').textContent = 'Analizando documento…';
   try {
+    const token = await tokenSesion();
     const resp = await fetch('/api/analyze', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apikey },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
         files: archivosCapturados.map(f => ({ mediaType: f.mediaType, base64: f.base64 }))
       })
@@ -1768,55 +1748,10 @@ document.getElementById('btn-registrar-otra').onclick = () => {
   irAHome();
 };
 
-// ---------- Compartir configuración (link con todo cargado) ----------
-function codificarConfig(obj) {
-  return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
-}
-function decodificarConfig(str) {
-  return JSON.parse(decodeURIComponent(escape(atob(str))));
-}
-
-document.getElementById('btn-generar-link').onclick = () => {
-  const datos = { apikey: cfg('apikey') };
-  if (!datos.apikey) {
-    alert('Primero cargá y guardá la API Key acá arriba, así el link la incluye.');
-    return;
-  }
-  const codificado = codificarConfig(datos);
-  const url = `${location.origin}${location.pathname}?setup=${codificado}`;
-  const area = document.getElementById('link-generado');
-  area.value = url;
-  area.classList.remove('oculto');
-  area.rows = 4;
-  document.getElementById('btn-copiar-link').classList.remove('oculto');
-};
-
-document.getElementById('btn-copiar-link').onclick = async () => {
-  const area = document.getElementById('link-generado');
-  area.select();
-  try {
-    await navigator.clipboard.writeText(area.value);
-    alert('Link copiado. Mandaselo por WhatsApp a Manu o Facu.');
-  } catch (e) {
-    document.execCommand('copy');
-    alert('Link copiado (o seleccionado, si tu navegador no permite copiar solo).');
-  }
-};
-
-function aplicarConfigDesdeLink() {
-  const params = new URLSearchParams(location.search);
-  const setup = params.get('setup');
-  if (!setup) return false;
-  try {
-    const datos = decodificarConfig(setup);
-    if (datos.apikey) setCfg('apikey', datos.apikey);
-    // Limpiamos el link de la barra de direcciones para no dejar la config a la vista
-    history.replaceState({}, '', location.pathname);
-    return true;
-  } catch (e) {
-    alert('El link de configuración no se pudo leer. Pedí que te manden uno nuevo.');
-    return false;
-  }
+// La clave de la IA ya no se guarda en los celulares: se borra la que haya quedado de antes y se limpia cualquier link viejo de configuración
+function limpiarClaveVieja() {
+  try { localStorage.removeItem('gm_apikey'); } catch (e) { /* sin acceso al almacenamiento */ }
+  if (new URLSearchParams(location.search).has('setup')) history.replaceState({}, '', location.pathname);
 }
 
 // ---------- Desperdicio ----------
@@ -4233,8 +4168,8 @@ function renderEERR(r, rPrev, modo, valor) {
       <div class="desglose-fila"><span>1. Cuánto vendiste<div class="eerr-ayuda">Todo lo que se cobró en el período: tarjetas, transferencias, QR y efectivo.</div></span><span><b>${fmtPesosEntero(v.venta)}</b></span></div>
       <div class="desglose-fila"><span>2. Cuánto se va en mercadería<div class="eerr-ayuda">De cada $100 que vendiste, esto se fue en comprar mercadería (fiambres, vermut, pan, verdura...) ajustado por lo que sobró en stock. Menos es mejor: tu objetivo es 36%.</div></span><span class="${sem(real <= 0.36)}">${pctTxt(real)}</span></div>
       <div class="desglose-fila total"><span>3. Resultado<div class="eerr-ayuda">Lo que ganaste: ventas menos TODOS los costos del período (mercadería, comisiones e impuestos, sueldos, alquiler, gastos fijos y otros, IVA). Las compras a crédito cuentan cuando se compran, aunque todavía no las hayas pagado. Tu objetivo es 25%.</div></span><span class="${sem(p.resultado >= 0.25)}">${fmtPesosEntero(res)}<br>${pctTxt(p.resultado)}</span></div>
-      <div class="desglose-fila"><span>4. Resultado final<div class="eerr-ayuda">Es el resultado menos la plata que además pagaste en el período por otras cosas: deudas de meses anteriores con proveedores, obras, bienes de uso y retiros. Así lo calcula hoy tu planilla.</div></span><span class="${resF < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(resF)}</span></div>
-      <div class="desglose-fila"><span>5. Resultado en plata<div class="eerr-ayuda">Lo que realmente te quedó en el bolsillo: como el anterior, pero sumando lo que compraste a crédito y todavía no pagaste (esa plata sigue siendo tuya por ahora).</div></span><span class="${v.res_plata < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(v.res_plata)}</span></div>
+      <div class="desglose-fila"><span>4. Resultado final (criterio de tu planilla)<div class="eerr-ayuda">Es el resultado menos la plata que además pagaste en el período por otras cosas: deudas de meses anteriores con proveedores, obras, bienes de uso y retiros. NO suma lo que compraste a crédito este mes. Así lo calcula tu planilla.</div></span><span class="${resF < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(resF)}</span></div>
+      <div class="desglose-fila"><span>5. Resultado en plata (suma la deuda generada)<div class="eerr-ayuda">Lo que realmente te quedó en el bolsillo: como el anterior, pero sumando lo que compraste a crédito y todavía no pagaste (esa plata sigue siendo tuya por ahora). Ejemplo: comprás $1.000.000 a 30 días; el resultado ya lo descuenta como gasto, y cuando lo pagás se resta otra vez en el resultado final; este número evita ese doble golpe.</div></span><span class="${v.res_plata < 0 ? 'bajo-minimo' : ''}">${fmtPesosEntero(v.res_plata)}</span></div>
     </div>`;
   const prevPorKey = {};
   if (rPrev) rPrev.lineas.forEach(l => { if (l.key) prevPorKey[l.key] = l; });
@@ -4633,7 +4568,7 @@ document.getElementById('btn-cal-confirmar').onclick = async () => {
 
 // ---------- Init ----------
 (async function init() {
-  aplicarConfigDesdeLink();
+  limpiarClaveVieja();
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     const ok = await cargarUsuarioActual();

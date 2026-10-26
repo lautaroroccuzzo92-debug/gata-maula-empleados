@@ -1,8 +1,9 @@
 // api/analyze.js
 // Proxy serverless (Vercel) hacia la API de Anthropic.
-// La API key NUNCA se hardcodea acá: la manda el navegador en el
-// header "x-api-key" (el usuario la carga en Ajustes, se guarda en
-// localStorage del teléfono, y viaja en cada request).
+// La API key NUNCA va en el navegador: se lee de la variable ANTHROPIC_API_KEY de Vercel, y solo pueden usarla
+// admin y encargado con sesión iniciada (se verifica el token de Supabase).
+
+import { supabaseAdmin, requireUsuario } from './_auth.js';
 
 export const config = {
   api: {
@@ -57,7 +58,7 @@ Formato de salida exacto:
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -67,9 +68,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiKey = req.headers['x-api-key'];
+    const admin = supabaseAdmin();
+    await requireUsuario(req, admin, ['admin', 'encargado']);
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return res.status(400).json({ error: 'Falta la API key de Anthropic (header x-api-key).' });
+      return res.status(500).json({ error: 'Falta cargar ANTHROPIC_API_KEY en las variables de entorno de Vercel.' });
     }
 
     const { files } = req.body; // [{ mediaType: 'image/jpeg' | 'application/pdf', base64: '...' }]
@@ -138,6 +141,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, extraido: parsed });
   } catch (err) {
-    return res.status(500).json({ error: 'Error interno del proxy: ' + err.message });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Error interno del proxy: ' + err.message });
   }
 }
