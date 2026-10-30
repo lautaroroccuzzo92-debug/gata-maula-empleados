@@ -873,7 +873,10 @@
         <select id="cal-pago-forma">
           <option value="egreso_banco">Banco / transferencia</option>
           <option value="egreso_efectivo">Efectivo</option>
+          <option value="ya_pagado">Ya estaba pagado y anotado (solo sacarlo del calendario)</option>
         </select>
+        <div class="aviso oculto" id="cal-pago-dto-aviso"></div>
+        <div class="aviso oculto" id="cal-pago-ya-aviso">Elegí banco o efectivo si todavía NO anotaste este pago en la app: se anota solo. Elegí la última opción si ya se anotó en Ingresos y egresos.</div>
         <label>Fecha de pago</label>
         <input type="date" id="cal-pago-fecha">
       </div>
@@ -892,6 +895,7 @@
       <div id="cal-resultado"></div>
       <button class="big" id="btn-cal-confirmar">Confirmar</button>
       <button class="secundario" id="btn-cal-cancelar">Cancelar</button>
+      <button class="secundario oculto" id="btn-cal-eliminar" style="color:var(--rojo)">Eliminar este pago del calendario</button>
     </div>
     <div id="calendario-lista"></div>
     <button class="secundario" id="btn-volver-calendario">Volver</button>
@@ -4456,6 +4460,21 @@ document.getElementById('btn-eerr-guardar').onclick = async () => {
 
 // ---------- Calendario de pagos a proveedores (admin) ----------
 let CALENDARIO = [];
+let DESCUENTO_EFECTIVO = {}; // proveedor_id -> % de descuento si se paga en efectivo
+
+// Avisa cuanto se paga de verdad si el proveedor hace descuento por efectivo
+function actualizarAvisoDescuentoCalendario() {
+  const c = CALENDARIO.find(x => x.id === calendarioEditandoId);
+  const aviso = document.getElementById('cal-pago-dto-aviso'), forma = document.getElementById('cal-pago-forma').value;
+  const pct = c && c.proveedor_id ? DESCUENTO_EFECTIVO[c.proveedor_id] : 0;
+  document.getElementById('cal-pago-ya-aviso').classList.toggle('oculto', forma !== 'ya_pagado');
+  if (c && pct > 0 && forma === 'egreso_efectivo' && c.egreso_id) {
+    const desc = Math.round(Number(c.total) * pct) / 100;
+    aviso.textContent = `${c.proveedor_texto} hace ${pct}% de descuento por efectivo: se paga ${formatoPesos(Number(c.total) - desc)} (descuento ${formatoPesos(desc)}) y el gasto baja por ese descuento.`;
+    aviso.classList.remove('oculto');
+  } else aviso.classList.add('oculto');
+}
+document.addEventListener('change', (ev) => { if (ev.target && ev.target.id === 'cal-pago-forma') actualizarAvisoDescuentoCalendario(); });
 let calendarioVerPagados = false;
 let calendarioEditandoId = null;
 
@@ -4489,6 +4508,9 @@ async function cargarCalendario() {
     if (pend.error) throw pend.error;
     if (pag.error) throw pag.error;
     CALENDARIO = (pend.data || []).concat(pag.data || []);
+    DESCUENTO_EFECTIVO = {};
+    const dto = await sb.from('proveedores').select('id,descuento_efectivo_pct').gt('descuento_efectivo_pct', 0);
+    if (!dto.error) (dto.data || []).forEach(p => { DESCUENTO_EFECTIVO[p.id] = Number(p.descuento_efectivo_pct); });
     renderCalendario();
   } catch (e) {
     cont.innerHTML = `<div class="estado-box estado-error">${e.message}</div>`;
@@ -4528,7 +4550,7 @@ function renderCalendario() {
       </div>
       <div style="text-align:right;flex:none">
         <div class="nombre">${formatoPesos(c.total)}</div>
-        ${c.pagado ? '' : `<button type="button" class="secundario btn-cal-pagar" data-id="${c.id}" style="width:auto;padding:6px 12px;margin:4px 0 0">Pagar</button>
+        ${c.pagado ? `<button type="button" class="secundario btn-cal-deshacer" data-id="${c.id}" style="width:auto;padding:6px 12px;margin:4px 0 0">Volver a pendiente</button>` : `<button type="button" class="secundario btn-cal-pagar" data-id="${c.id}" style="width:auto;padding:6px 12px;margin:4px 0 0">Pagar</button>
         <button type="button" class="secundario btn-cal-editar" data-id="${c.id}" style="width:auto;padding:6px 12px;margin:4px 0 0">Editar</button>`}
       </div>
     </div>`;
@@ -4543,6 +4565,15 @@ function renderCalendario() {
 
   cont.querySelectorAll('.btn-cal-pagar').forEach(b => { b.onclick = () => abrirPagoCalendario(b.dataset.id); });
   cont.querySelectorAll('.btn-cal-editar').forEach(b => { b.onclick = () => abrirEditarCalendario(b.dataset.id); });
+  cont.querySelectorAll('.btn-cal-deshacer').forEach(b => {
+    b.onclick = async () => {
+      const c = CALENDARIO.find(x => x.id === b.dataset.id);
+      if (!c || !confirm(`¿Volver a dejar pendiente el pago de ${c.proveedor_texto} (${formatoPesos(c.total)})?`)) return;
+      const { error } = await sb.from('calendario_pagos').update({ pagado: false, fecha_pago: null, medio_pago: null }).eq('id', c.id);
+      if (error) { alert('Error: ' + error.message); return; }
+      await cargarCalendario();
+    };
+  });
 }
 
 function abrirPagoCalendario(id) {
@@ -4556,6 +4587,8 @@ function abrirPagoCalendario(id) {
   document.getElementById('cal-pago-forma').value = 'egreso_banco';
   document.getElementById('cal-pago-fecha').value = new Date().toISOString().slice(0, 10);
   document.getElementById('cal-resultado').innerHTML = '';
+  document.getElementById('btn-cal-eliminar').classList.add('oculto');
+  actualizarAvisoDescuentoCalendario();
   document.getElementById('calendario-form').classList.remove('oculto');
   document.getElementById('calendario-form').scrollIntoView({ behavior: 'smooth' });
 }
@@ -4574,6 +4607,7 @@ function abrirEditarCalendario(id) {
   document.getElementById('cal-ed-nro').value = c.nro_factura || '';
   document.getElementById('cal-ed-nota').value = c.nota || '';
   document.getElementById('cal-resultado').innerHTML = '';
+  document.getElementById('btn-cal-eliminar').classList.remove('oculto');
   document.getElementById('calendario-form').classList.remove('oculto');
   document.getElementById('calendario-form').scrollIntoView({ behavior: 'smooth' });
 }
@@ -4590,17 +4624,29 @@ document.getElementById('btn-calendario-nuevo').onclick = () => {
   document.getElementById('cal-ed-nro').value = '';
   document.getElementById('cal-ed-nota').value = '';
   document.getElementById('cal-resultado').innerHTML = '';
+  document.getElementById('btn-cal-eliminar').classList.add('oculto');
   document.getElementById('calendario-form').classList.remove('oculto');
   document.getElementById('calendario-form').scrollIntoView({ behavior: 'smooth' });
 };
 document.getElementById('btn-cal-cancelar').onclick = () => {
   document.getElementById('calendario-form').classList.add('oculto');
 };
+document.getElementById('btn-cal-eliminar').onclick = async () => {
+  const c = CALENDARIO.find(x => x.id === calendarioEditandoId);
+  if (!c || !confirm(`¿Eliminar del calendario el pago de ${c.proveedor_texto} por ${formatoPesos(c.total)}? Solo se saca de esta lista: no cambia el estado de resultados.`)) return;
+  const { error } = await sb.from('calendario_pagos').delete().eq('id', c.id);
+  if (error) { document.getElementById('cal-resultado').innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+  document.getElementById('calendario-form').classList.add('oculto');
+  await cargarCalendario();
+};
 document.getElementById('btn-cal-confirmar').onclick = async () => {
   const modo = document.getElementById('cal-modo').value;
   const res = document.getElementById('cal-resultado');
   res.innerHTML = '';
-  if (modo === 'pagar') {
+  if (modo === 'pagar' && document.getElementById('cal-pago-forma').value === 'ya_pagado') {
+    const { error } = await sb.from('calendario_pagos').update({ pagado: true, fecha_pago: document.getElementById('cal-pago-fecha').value || null, medio_pago: 'ya anotado' }).eq('id', calendarioEditandoId);
+    if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+  } else if (modo === 'pagar') {
     const { error } = await sb.rpc('pagar_calendario', {
       p_id: calendarioEditandoId,
       p_forma: document.getElementById('cal-pago-forma').value,
