@@ -384,7 +384,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   v_ini date := date_trunc('month', p_mes)::date;
   v_fin date := (date_trunc('month', p_mes) + interval '1 month - 1 day')::date;
-  v_lote text := 'sueldos-' || to_char(date_trunc('month', p_mes), 'YYYY-MM');
+  v_lote text := to_char(date_trunc('month', p_mes), 'YYYY-MM');
   v_efe numeric; v_ban numeric; v_n int; v_ab int; v_sin_tarifa text; v_neg text;
 begin
   if public.rol_actual() <> 'admin' then raise exception 'Sin permiso'; end if;
@@ -417,10 +417,10 @@ grant execute on function public.sueldos_confirmar_mes(date) to authenticated;
 create or replace function public.sueldos_reabrir_mes(p_mes date)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v_ini date := date_trunc('month', p_mes)::date; v_lote text := 'sueldos-' || to_char(date_trunc('month', p_mes), 'YYYY-MM');
+declare v_ini date := date_trunc('month', p_mes)::date; v_lote text := to_char(date_trunc('month', p_mes), 'YYYY-MM');
 begin
   if public.rol_actual() <> 'admin' then raise exception 'Sin permiso'; end if;
-  delete from public.ingresos_egresos where lote_importacion = v_lote and concepto = 'PERSONAL' and origen = 'manual';
+  delete from public.ingresos_egresos where lote_importacion = v_lote and concepto = 'PERSONAL' and origen = 'manual' and observaciones like 'Sueldos de ' || to_char(v_ini, 'MM/YYYY') || ' (%';
   update public.sueldos_meses set estado = 'abierto', confirmado_el = null, confirmado_por = null where mes = v_ini;
   return jsonb_build_object('ok', true);
 end;

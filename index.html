@@ -4220,15 +4220,20 @@ async function datosPeriodoEERR(modo, valor) {
   else { desde = valor + '-01-01'; hasta = valor + '-12-31'; }
   const { data, error } = await sb.rpc('eerr_base', { p_desde: desde, p_hasta: hasta });
   if (error) throw error;
-  const { data: manuales, error: errM } = await sb.from('eerr_manual').select('*').gte('mes', desde).lte('mes', hasta);
+  // se trae también el mes anterior: su stock final es el stock inicial de este mes si no hay otro dato
+  const dPrev = new Date(Number(desde.slice(0, 4)), Number(desde.slice(5, 7)) - 2, 1);
+  const desdePrev = isoDeFecha(dPrev);
+  const { data: manuales, error: errM } = await sb.from('eerr_manual').select('*').gte('mes', desdePrev).lte('mes', hasta);
   if (errM) throw errM;
   const svPorMes = {};
   try { const sv = await sb.rpc('stock_valorizado_eerr', { p_desde: desde, p_hasta: hasta }); (sv.data || []).forEach(x => { svPorMes[x.mes] = x; }); } catch (e) { /* sin stock automático */ }
+  const pbPorMes = {};
+  try { const pb = await sb.rpc('eerr_postberry', { p_desde: desde, p_hasta: hasta }); (pb.data || []).forEach(x => { pbPorMes[x.mes] = x; }); } catch (e) { /* sin datos de Postberry */ }
   const manualPorMes = {};
   (manuales || []).forEach(m => { manualPorMes[m.mes.slice(0, 7)] = m; });
   const porMes = {};
   ((data && data.meses) || []).forEach(m => { porMes[m.mes] = m; });
-  const claves = modo === 'mes' ? [valor] : Object.keys(Object.assign({}, porMes, manualPorMes)).sort();
+  const claves = modo === 'mes' ? [valor] : Object.keys(Object.assign({}, porMes, manualPorMes)).sort().filter(k => k >= desde.slice(0, 7));
   const meses = claves.map(ym => {
     const b = porMes[ym] || { caja: {}, egresos: [], desperdicios: 0 };
     const egr = {};
@@ -4241,6 +4246,22 @@ async function datosPeriodoEERR(modo, valor) {
     if (sv) {
       if (sv.fin !== null && sv.fin !== undefined) { man.stock_fin = Number(sv.fin); man._stock_auto = 1; }
       if (sv.inicio !== null && sv.inicio !== undefined) { man.stock_inicio = Number(sv.inicio); man._stock_auto = 1; }
+    }
+    // sin stock inicial cargado ni foto del mes anterior: es el stock final del mes anterior
+    if (man.stock_inicio === undefined) {
+      const [yy, mm2] = ym.split('-').map(Number);
+      const prevYm = new Date(yy, mm2 - 2, 1);
+      const prevKey = prevYm.getFullYear() + '-' + String(prevYm.getMonth() + 1).padStart(2, '0');
+      const pm = manualPorMes[prevKey];
+      if (pm && pm.stock_fin !== null && pm.stock_fin !== undefined) man.stock_inicio = Number(pm.stock_fin);
+    }
+    // ventas por sector y a cobrar de tarjetas: de Postberry, solo si no están cargadas a mano
+    const pbm = pbPorMes[ym];
+    if (pbm) {
+      if (man.ventas_sandwiches === undefined && man.ventas_vermut === undefined && (Number(pbm.ventas_sandwiches) || Number(pbm.ventas_vermut))) {
+        man.ventas_sandwiches = Number(pbm.ventas_sandwiches) || 0; man.ventas_vermut = Number(pbm.ventas_vermut) || 0; man._pb_auto = 1;
+      }
+      if (man.a_cobrar_tarjetas === undefined && Number(pbm.a_cobrar_tarjetas)) { man.a_cobrar_tarjetas = Number(pbm.a_cobrar_tarjetas); man._tarj_auto = 1; }
     }
     return {
       caja: { tc: c.tc, td: c.td, tr: c.tr, qp: c.qp, mp: c.mp, efe: c.efe, fiscal: c.fiscal != null ? c.fiscal : null },

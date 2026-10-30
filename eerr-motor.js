@@ -81,8 +81,8 @@
     add('venta', 'VENTA TOTAL', 'resultado', ventaTotal);
 
     titulo('VENTAS POR SECTOR');
-    add('v_sand', 'SANDWICHES Y PICADA', 'linea', n(man.ventas_sandwiches), { editable: 'ventas_sandwiches' });
-    add('v_verm', 'VERMUT Y OTROS', 'linea', n(man.ventas_vermut), { editable: 'ventas_vermut' });
+    add('v_sand', 'SANDWICHES Y PICADA', 'linea', n(man.ventas_sandwiches), { editable: 'ventas_sandwiches', nota: man._pb_auto ? 'Automático desde Postberry' : null });
+    add('v_verm', 'VERMUT Y OTROS', 'linea', n(man.ventas_vermut), { editable: 'ventas_vermut', nota: man._pb_auto ? 'Automático desde Postberry' : null });
 
     // ---------- COSTO VARIABLE POR PRODUCTO ----------
     titulo('COSTO VARIABLE · VERMUT Y OTROS');
@@ -212,7 +212,7 @@
     add('s_mp', 'MERCADO PAGO', 'linea', n(man.saldo_mercado_pago), { sinPct: true, editable: 'saldo_mercado_pago' });
     add('s_banco', 'BANCO NACIÓN', 'linea', n(man.saldo_banco), { sinPct: true, editable: 'saldo_banco' });
     add('s_caja', 'HAY EN CAJA AL ÚLTIMO DÍA DEL MES', 'linea', cajaEfe, { sinPct: true, nota: 'Efectivo de ventas menos egresos en efectivo' });
-    add('s_tarjetas', 'A COBRAR TARJETAS (aprox.)', 'linea', n(man.a_cobrar_tarjetas), { sinPct: true, editable: 'a_cobrar_tarjetas' });
+    add('s_tarjetas', 'A COBRAR TARJETAS (aprox.)', 'linea', n(man.a_cobrar_tarjetas), { sinPct: true, editable: 'a_cobrar_tarjetas', nota: man._tarj_auto ? 'Estimado desde Postberry: débito de los últimos 2 días + crédito de los últimos 10 días del mes' : null });
     add('s_banco2', 'SALDO EN EL BANCO AL ÚLTIMO DÍA DEL MES', 'linea', n(man.saldo_banco_fin), { sinPct: true, editable: 'saldo_banco_fin' });
     add('s_fondo', 'FONDO DE INVERSIÓN', 'linea', n(man.fondo_inversion), { sinPct: true, editable: 'fondo_inversion' });
     var sumaSaldos = n(man.saldo_mercado_pago) + n(man.saldo_banco) + cajaEfe + n(man.a_cobrar_tarjetas) + n(man.saldo_banco_fin) + n(man.fondo_inversion);
