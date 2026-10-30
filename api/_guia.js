@@ -2,13 +2,13 @@
 // Guía de uso de la app de Gata Maula para el asistente. Si se cambia o agrega una pantalla,
 // hay que actualizar este texto para que la IA explique lo que realmente existe.
 
-export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'recetas', 'caja', 'ingresos', 'precios', 'ventas', 'produccion', 'alertas', 'eerr', 'calendario'];
+export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'recetas', 'caja', 'ingresos', 'precios', 'ventas', 'produccion', 'alertas', 'eerr', 'calendario', 'horas', 'sueldos'];
 
 export const GUIA = `GUÍA DE LA APP (lo único que existe; no inventes pantallas ni botones que no estén acá)
 
 Entrada: se entra con usuario y contraseña (cada persona tiene la suya). Arriba a la izquierda está "🔓 Salir" y arriba a la derecha "⚙️" (ajustes). Después del ingreso se ve la pantalla de inicio con botones. Cada pantalla tiene un botón "Volver" abajo.
 Las listas largas (stock, pedidos, calendario de pagos, lotes de producción, últimos cierres, alertas, etc.) vienen plegadas: se tocan para desplegar y muestran la cantidad en el título.
-Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Recetas (sin precios; puede crear y editar las suyas), Producción y vencimientos, Desperdicio, Stock y Pedidos.
+Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Recetas (sin precios; puede crear y editar las suyas), Producción y vencimientos, Desperdicio, Stock, Pedidos y Mis horas. "Mis horas" lo ven todos; "Sueldos" solo el ADMIN.
 
 1) REGISTRAR MERCADERÍA (admin y encargado) — [[ir:mercaderia]]
 Está en el inicio, en la tarjeta "Registrar mercadería". Sirve para cargar una factura o remito de un proveedor sacándole una foto.
@@ -69,6 +69,13 @@ Pestañas: "Activos" (lotes en curso, ordenados por lo que vence primero), "Term
 - Merma: elegir fechas y tocar "Ver merma" para ver por producto cuánto se elaboró, usó y tiró.
 - Catálogo (admin y encargado): lista de productos con su vida útil sugerida. Se puede cambiar, agregar productos nuevos y vincular cada uno con una preparación de Recetas para valorizar la merma en pesos.
 - Un lote terminado por error solo lo puede reabrir el administrador (pestaña Terminados, "Reabrir lote").
+
+11d) MIS HORAS (todos) — [[ir:horas]]
+Cada persona del personal marca su entrada con "▶️ Marcar entrada" al empezar el turno y "⏹️ Marcar salida" al terminar (se guarda la hora de ese momento). Abajo ve el mes elegido: sus turnos con día, entrada, salida y horas, y el total de horas del mes. Si alguien se olvidó de marcar o se equivocó, NO puede corregirlo solo: lo corrige Manu, Facu o el administrador. Si aparece el aviso de que su usuario no está en la lista de personal, hay que avisarle a Manu, Facu o Lautaro. Los turnos que pasan de medianoche se cuentan bien (la salida es la hora del día siguiente). El 🎌 marca los feriados.
+Solo admin y encargado ven además: "👥 Horas del equipo" (cada persona con sus turnos y horas del mes; "Ver / cargar" permite agregar un turno a mano, editarlo o eliminarlo) y "🧑‍🍳 Personal" (agregar a alguien que viene de vez en cuando o ya no trabaja, o cambiar sus datos). Cuando el administrador confirma el mes en Sueldos, ese mes queda cerrado y no se puede cambiar nada. El administrador además puede cargar licencias médicas (certificado) como horas a pagar y asignar el valor hora y el usuario de cada persona.
+
+11e) SUELDOS (solo admin) — [[ir:sueldos]]
+Se elige el mes trabajado (el sueldo se paga el 1 del mes siguiente). Por cada persona se ven las horas normales, las horas en feriado (se pagan doble) y las de licencia, el valor hora (se puede cambiar desde ese mes) y el sueldo por horas. Se pueden cargar aguinaldo, bono, descuentos/adelantos y cuánto va por transferencia (el resto es efectivo), con "Guardar ajustes". "Ver turnos y cargar licencia" lleva a las horas de esa persona. "✅ Confirmar mes y cargar en Ingresos/Egresos" crea en Ingresos y egresos una fila PERSONAL en efectivo y otra por banco con fecha del último día del mes trabajado, y cierra el mes; de ahí el estado de resultados toma el costo laboral. "🔓 Reabrir el mes" deshace eso. Las cargas sociales se siguen anotando aparte en Ingresos y egresos. En el desplegable "🎌 Feriados" se agregan o quitan los feriados del año.
 
 12) ASISTENTE IA
 Es este chat: responde dudas de cómo usar la app y, para admin y encargado, también consultas sobre los datos del negocio (stock, ventas por día, márgenes). Solo mira, no cambia nada.
