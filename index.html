@@ -279,6 +279,32 @@
       </div>
     </div>
 
+    <details class="grupo-stock oculto" id="vac-mias-det" style="margin-top:14px">
+      <summary><span>🏖️ Mis vacaciones</span></summary>
+      <div class="grupo-stock-body" id="vac-mias"></div>
+    </details>
+    <details class="grupo-stock oculto" id="vac-equipo-det" style="margin-top:14px">
+      <summary><span>🏖️ Vacaciones del equipo</span></summary>
+      <div class="grupo-stock-body">
+        <div id="vac-equipo"></div>
+        <div id="vac-form" class="card oculto" style="margin-top:10px">
+          <input type="hidden" id="vac-id">
+          <label style="margin-top:0">Persona</label>
+          <select id="vac-persona"></select>
+          <label>Primer día de vacaciones</label>
+          <input type="date" id="vac-desde">
+          <label>Último día de vacaciones</label>
+          <input type="date" id="vac-hasta">
+          <label>Nota (opcional)</label>
+          <input type="text" id="vac-nota">
+          <div id="vac-res"></div>
+          <button class="big" id="btn-vac-guardar">Guardar</button>
+          <button class="secundario oculto" id="btn-vac-borrar" style="color:var(--rojo)">Eliminar estas vacaciones</button>
+          <button class="secundario" id="btn-vac-cancelar">Cancelar</button>
+        </div>
+      </div>
+    </details>
+
     <div class="card" id="card-mercaderia">
       <h2 class="section-title" style="margin-top:0">Registrar mercadería</h2>
       <div class="grid-captura">
@@ -1281,6 +1307,7 @@ function irAHome() {
   actualizarBadgePedidos();
   actualizarBadgeProduccion();
   actualizarHorasHome();
+  actualizarVacaciones();
 }
 
 // ---------- Config ----------
@@ -4992,6 +5019,112 @@ document.getElementById('btn-personal-guardar').onclick = async () => {
   document.getElementById('personal-form').classList.add('oculto');
   cargarPersonal(); cargarHorasEquipo();
 };
+// ---------- Vacaciones ----------
+function gatoPlayaSvg() {
+  return `<svg viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="Gatito en la playa con anteojos de sol tomando un trago" style="flex:none">
+    <rect width="120" height="90" rx="10" fill="#bfe6f5"/>
+    <circle cx="100" cy="16" r="9" fill="#ffd54a"/>
+    <rect y="50" width="120" height="18" fill="#4fb3d9"/>
+    <path d="M0 52 Q15 47 30 52 T60 52 T90 52 T120 52" fill="none" stroke="#e8f7fd" stroke-width="1.5"/>
+    <path d="M0 66 H120 V80 Q120 90 110 90 H10 Q0 90 0 80 Z" fill="#f2d49b"/>
+    <ellipse cx="46" cy="76" rx="20" ry="12" fill="#f0a35a"/>
+    <polygon points="31,31 33,13 45,25" fill="#f0a35a"/><polygon points="61,31 59,13 47,25" fill="#f0a35a"/>
+    <polygon points="34,28 35,18 41,25" fill="#f6c6b0"/><polygon points="58,28 57,18 51,25" fill="#f6c6b0"/>
+    <circle cx="46" cy="42" r="18" fill="#f0a35a"/>
+    <rect x="32" y="36" width="13" height="9" rx="3.5" fill="#1a1a1a"/><rect x="47" y="36" width="13" height="9" rx="3.5" fill="#1a1a1a"/>
+    <line x1="45" y1="39" x2="47" y2="39" stroke="#1a1a1a" stroke-width="2"/>
+    <line x1="32" y1="38" x2="28" y2="36" stroke="#1a1a1a" stroke-width="1.5"/><line x1="60" y1="38" x2="64" y2="36" stroke="#1a1a1a" stroke-width="1.5"/>
+    <rect x="34" y="37" width="4" height="2" rx="1" fill="#ffffff" opacity=".45"/><rect x="49" y="37" width="4" height="2" rx="1" fill="#ffffff" opacity=".45"/>
+    <polygon points="44,48 48,48 46,51" fill="#e07a8a"/>
+    <path d="M41 52 Q46 57 51 52" fill="none" stroke="#5a3b1a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="30" y1="49" x2="38" y2="50" stroke="#5a3b1a" stroke-width=".8"/><line x1="30" y1="53" x2="38" y2="52" stroke="#5a3b1a" stroke-width=".8"/>
+    <line x1="62" y1="49" x2="54" y2="50" stroke="#5a3b1a" stroke-width=".8"/><line x1="62" y1="53" x2="54" y2="52" stroke="#5a3b1a" stroke-width=".8"/>
+    <path d="M62 70 Q72 68 76 62" fill="none" stroke="#f0a35a" stroke-width="6" stroke-linecap="round"/>
+    <polygon points="70,40 88,40 79,56" fill="#ff7a59" stroke="#ffffff" stroke-width="1.5"/>
+    <line x1="79" y1="56" x2="79" y2="66" stroke="#ffffff" stroke-width="1.5"/><line x1="73" y1="66" x2="85" y2="66" stroke="#ffffff" stroke-width="1.5"/>
+    <path d="M74 36 Q79 28 85 36 Z" fill="#ff4f7b"/><line x1="79" y1="32" x2="79" y2="42" stroke="#7a4a2a" stroke-width="1"/>
+    <circle cx="77" cy="62" r="3.2" fill="#f0a35a"/>
+  </svg>`;
+}
+let VAC_TIMER = null;
+const fmtFechaLarga = (iso) => { const p = String(iso).slice(0, 10).split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+function textoCuentaVac(p) {
+  if (!p) return '';
+  const ahora = Date.now(), ini = Date.parse(p.desde + 'T00:00:00-03:00'), fin = Date.parse(p.hasta + 'T23:59:59-03:00');
+  if (ahora >= ini && ahora <= fin) {
+    const dias = Math.ceil((fin - ahora) / 86400000);
+    return `<b>¡Estás de vacaciones!</b> 🍹<br>Volvés a trabajar el ${fmtFechaLarga(new Date(fin + 1000).toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }))}. Te quedan ${dias} ${dias === 1 ? 'día' : 'días'}.`;
+  }
+  const ms = ini - ahora;
+  if (ms <= 0) return '';
+  const d = Math.floor(ms / 86400000), h = Math.floor(ms % 86400000 / 3600000), m = Math.floor(ms % 3600000 / 60000);
+  return `Faltan <b>${d} ${d === 1 ? 'día' : 'días'}, ${h} h y ${m} min</b> para tus vacaciones`;
+}
+function resumenVacHtml(r, conGato) {
+  const sinIngreso = r.corresponden === null || r.corresponden === undefined;
+  const prox = r.proxima;
+  const cuenta = prox ? `<div class="vac-cuenta" data-desde="${prox.desde}" data-hasta="${prox.hasta}" style="font-size:15px">${textoCuentaVac(prox)}</div>
+    <div class="sub">${fmtFechaLarga(prox.desde)} al ${fmtFechaLarga(prox.hasta)} · ${prox.dias} ${prox.dias === 1 ? 'día' : 'días'}${prox.nota ? ' · ' + escaparHtml(prox.nota) : ''}</div>`
+    : '<div style="font-size:15px">Todavía no hay vacaciones programadas.</div>';
+  const dias = sinIngreso ? '<div class="sub">Falta cargar la fecha de ingreso para saber cuántos días corresponden.</div>'
+    : `<div class="sub">Este año (${r.anio}) te corresponden <b>${r.corresponden}</b> días · cargados ${r.cargados}${r.tomados ? ` (ya tomados ${r.tomados})` : ''} · te quedan <b>${r.disponibles}</b></div>`;
+  return `<div style="display:flex;gap:10px;align-items:center">${conGato ? gatoPlayaSvg() : ''}<div style="flex:1">${cuenta}${dias}</div></div>`;
+}
+function refrescarCuentasVac() {
+  document.querySelectorAll('.vac-cuenta').forEach(el => { el.innerHTML = textoCuentaVac({ desde: el.dataset.desde, hasta: el.dataset.hasta }); });
+}
+async function actualizarVacaciones() {
+  const det = document.getElementById('vac-mias-det'), cont = document.getElementById('vac-mias');
+  const detEq = document.getElementById('vac-equipo-det');
+  detEq.classList.toggle('oculto', !esGestor());
+  det.classList.add('oculto');
+  try {
+    const { data, error } = await sb.rpc('vacaciones_mias');
+    if (!error && data && data.empleado_id) { det.classList.remove('oculto'); cont.innerHTML = resumenVacHtml(data, true); }
+  } catch (e) { /* sin acceso a vacaciones */ }
+  if (esGestor()) cargarVacacionesEquipo();
+  if (!VAC_TIMER) VAC_TIMER = setInterval(refrescarCuentasVac, 30000);
+}
+let VAC_EQUIPO = [];
+async function cargarVacacionesEquipo() {
+  const cont = document.getElementById('vac-equipo');
+  const { data, error } = await sb.rpc('vacaciones_equipo');
+  if (error) { cont.innerHTML = `<div class="aviso">${escaparHtml(error.message)}</div>`; return; }
+  VAC_EQUIPO = data || [];
+  cont.innerHTML = '<button class="agregar-producto" id="btn-vac-nueva" style="margin-top:0">+ Cargar vacaciones</button>' + (VAC_EQUIPO.map(r => `<div class="lista-item" style="display:block"><div class="nombre">${escaparHtml(r.nombre)}</div>
+    ${resumenVacHtml(r, false)}
+    ${(r.lista || []).map(v => `<div class="sub">• ${fmtFechaLarga(v.desde)} al ${fmtFechaLarga(v.hasta)} (${v.dias} días)${v.nota ? ' · ' + escaparHtml(v.nota) : ''} <a href="#" class="vac-edit" data-id="${v.id}" data-emp="${r.empleado_id}">editar</a></div>`).join('')}</div>`).join('') || '<div class="aviso">No hay personal cargado.</div>');
+  document.getElementById('btn-vac-nueva').onclick = () => abrirFormVac(null, null);
+  cont.querySelectorAll('.vac-edit').forEach(a => { a.onclick = (ev) => { ev.preventDefault(); const r = VAC_EQUIPO.find(x => x.empleado_id === a.dataset.emp); abrirFormVac((r.lista || []).find(v => v.id === a.dataset.id), a.dataset.emp); }; });
+  refrescarCuentasVac();
+}
+function abrirFormVac(v, empId) {
+  document.getElementById('vac-persona').innerHTML = VAC_EQUIPO.map(r => `<option value="${r.empleado_id}">${escaparHtml(r.nombre)}</option>`).join('');
+  document.getElementById('vac-persona').value = empId || (VAC_EQUIPO[0] && VAC_EQUIPO[0].empleado_id) || '';
+  document.getElementById('vac-id').value = v ? v.id : '';
+  document.getElementById('vac-desde').value = v ? v.desde : '';
+  document.getElementById('vac-hasta').value = v ? v.hasta : '';
+  document.getElementById('vac-nota').value = v && v.nota ? v.nota : '';
+  document.getElementById('vac-res').innerHTML = '';
+  document.getElementById('btn-vac-borrar').classList.toggle('oculto', !v);
+  document.getElementById('vac-form').classList.remove('oculto');
+}
+document.getElementById('btn-vac-cancelar').onclick = () => document.getElementById('vac-form').classList.add('oculto');
+document.getElementById('btn-vac-guardar').onclick = async () => {
+  const { error } = await sb.rpc('vacaciones_guardar', { p_id: document.getElementById('vac-id').value || null, p_empleado: document.getElementById('vac-persona').value,
+    p_desde: document.getElementById('vac-desde').value || null, p_hasta: document.getElementById('vac-hasta').value || null, p_nota: document.getElementById('vac-nota').value });
+  if (error) { document.getElementById('vac-res').innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(error.message)}</div>`; return; }
+  document.getElementById('vac-form').classList.add('oculto');
+  actualizarVacaciones();
+};
+document.getElementById('btn-vac-borrar').onclick = async () => {
+  if (!confirm('¿Eliminar estas vacaciones?')) return;
+  const { error } = await sb.rpc('vacaciones_borrar', { p_id: document.getElementById('vac-id').value });
+  if (error) { document.getElementById('vac-res').innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(error.message)}</div>`; return; }
+  document.getElementById('vac-form').classList.add('oculto');
+  actualizarVacaciones();
+};
+
 // Historial de horas y búsqueda por día
 async function cargarHistorialHoras() {
   const cont = document.getElementById('hist-lista');
