@@ -4221,7 +4221,7 @@ async function cargarStockValorizado() {
   tot.textContent = '· ' + formatoPesos(data.total);
   const rubros = Object.entries(data.por_rubro || {}).sort((a, b) => b[1] - a[1]);
   const aparte = Object.entries(data.aparte || {});
-  cuerpo.innerHTML = `<div class="aviso" style="margin-top:0">Es la suma de cada producto del Stock × su precio de costo × 1,21 (con IVA, como tu planilla). El mes en curso usa este número como stock final; el stock inicial es la foto de fin del mes anterior.</div>` +
+  cuerpo.innerHTML = `<div class="aviso" style="margin-top:0">Es la suma de cada producto del Stock × su precio de costo, con IVA ×1,21 solo en vermut, fiambres y quesos (como tu planilla TOTAL DE MERCADERIA). El mes en curso usa este número como stock final. El cierre de cada mes es la foto que se saca sola el día 1 a las 3 de la madrugada: es el stock final del mes anterior y el inicial del nuevo.</div>` +
     rubros.map(([r, v]) => `<div class="lista-item"><div class="nombre">${escaparHtml(ETIQUETA_INSUMOS[r] || r)}</div><div class="nombre">${formatoPesos(v)}</div></div>`).join('') +
     `<div class="lista-item"><div class="nombre"><b>Total mercadería</b></div><div class="nombre"><b>${formatoPesos(data.total)}</b></div></div>` +
     (aparte.length ? `<div class="aviso">No incluidos en el total: ${aparte.map(([r, v]) => escaparHtml(ETIQUETA_INSUMOS[r] || r) + ' ' + formatoPesos(v)).join(' · ')}.</div>` : '') +
@@ -5085,7 +5085,7 @@ async function cargarSueldos() {
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label>Aguinaldo${[6, 12].includes(Number(ym.slice(5, 7))) && !conf ? ' <a href="#" class="btn-sj-ag-sug" style="font-size:12px">calcular</a>' : ''}</label><input type="number" step="0.01" class="sj-ag" value="${Number(f.aguinaldo) || ''}" ${dis}></div>
-        <div><label>Vacaciones</label><input type="number" step="0.01" class="sj-va" value="${Number(f.vacaciones) || ''}" ${dis}></div>
+        <div><label>Vacaciones${conf ? '' : ' <a href="#" class="btn-sj-va-sug" style="font-size:12px">calcular</a>'}</label><input type="number" step="0.01" class="sj-va" value="${Number(f.vacaciones) || ''}" ${dis}></div>
         <div><label>Bono por rendimiento</label><input type="number" step="0.01" class="sj-bo" value="${Number(f.bono) || ''}" ${dis}></div>
         <div><label>Descuentos / adelantos</label><input type="number" step="0.01" class="sj-de" value="${Number(f.descuentos) || ''}" ${dis}></div>
         <div><label>Por transferencia</label><input type="number" step="0.01" class="sj-tr" value="${Number(f.transferencia) || ''}" ${dis}></div>
@@ -5117,6 +5117,22 @@ async function cargarSueldos() {
       if (!mio) { res.innerHTML = '<div class="aviso">No pude calcular el aguinaldo de esta persona.</div>'; return; }
       card.querySelector('.sj-ag').value = mio.aguinaldo;
       res.innerHTML = `<div class="aviso">Aguinaldo sugerido: 50% de ${fmtPesos(mio.mejor_mes)} (su mejor mes del semestre) × ${mio.dias}/${mio.dias_semestre} días = ${fmtPesos(mio.aguinaldo)}. Revisalo y tocá "Guardar ajustes".</div>`;
+    };
+    const vsug = card.querySelector('.btn-sj-va-sug');
+    if (vsug) vsug.onclick = async (ev) => {
+      ev.preventDefault();
+      const { data: vs, error: e } = await sb.rpc('sueldos_vacaciones_sugerida', { p_mes: ym + '-01' });
+      if (e) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(e.message)}</div>`; return; }
+      const mio = (vs || []).find(x => x.empleado_id === emp);
+      if (!mio || mio.dias == null) { res.innerHTML = '<div class="aviso">Falta la fecha de ingreso de esta persona (Mis horas → Personal → Editar) para saber cuántos días le corresponden.</div>'; return; }
+      if (mio.valor_hora == null) { res.innerHTML = '<div class="aviso">Falta el valor hora de esta persona.</div>'; return; }
+      const txt = prompt(`${mio.nombre}: le corresponden ${mio.dias} días${mio.proporcional ? ' (proporcional a los días trabajados)' : ''}. ¿Cuántos días de vacaciones se pagan este mes?`, mio.dias);
+      if (txt === null) return;
+      const dias = Number(String(txt).replace(',', '.'));
+      if (!(dias >= 0)) return;
+      const monto = Math.round(Number(mio.valor_hora) * Number(mio.prom_horas_dia) * dias);
+      card.querySelector('.sj-va').value = monto;
+      res.innerHTML = `<div class="aviso">Vacaciones sugeridas: ${fmtPesos(mio.valor_hora)} por hora × ${Number(mio.prom_horas_dia).toLocaleString('es-AR')} horas promedio por día × ${dias} días = ${fmtPesos(monto)}. Revisalo y tocá "Guardar ajustes".</div>`;
     };
     const gv = card.querySelector('.btn-sv-valor');
     if (gv) gv.onclick = async () => {
