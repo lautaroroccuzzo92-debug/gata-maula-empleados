@@ -1,6 +1,6 @@
 -- Gata Maula: valores hora actuales (de tu planilla de sueldos de septiembre 2026) y usuario de Rocio.
 --   * Valor hora: Manu 5900, Facu 5500, Basti 5150, Lucas 4900 (rigen desde el 1/9/2026, o sea que valen para octubre).
---     Rocio cobra lo mismo que Lucas (4900). Alex no esta en esa planilla: su valor se carga despues en Sueldos o en Mis horas > Personal.
+--     Rocio cobra lo mismo que Lucas (4900). Alex tambien cobra 4900.
 --   * Usuario de Rocio: primero hay que crearlo en Supabase (Authentication > Users > Add user > Create new user,
 --     email rocio@gatamaula.local, una contrasena, y tildar "Auto Confirm User"). Despues se corre este archivo.
 --     Si todavia no esta creado, esa parte se saltea y no pasa nada: se puede volver a correr.
@@ -8,7 +8,7 @@
 
 insert into public.empleado_tarifas (empleado_id, desde, valor_hora)
 select e.id, '2026-09-01'::date, v.valor
-  from (values ('manu', 5900), ('facu', 5500), ('basti', 5150), ('lucas', 4900), ('rocio', 4900)) as v(nombre, valor)
+  from (values ('manu', 5900), ('facu', 5500), ('basti', 5150), ('lucas', 4900), ('rocio', 4900), ('alex', 4900)) as v(nombre, valor)
   join public.empleados e on translate(lower(e.nombre), 'í', 'i') = v.nombre
 on conflict (empleado_id, desde) do update set valor_hora = excluded.valor_hora;
 
