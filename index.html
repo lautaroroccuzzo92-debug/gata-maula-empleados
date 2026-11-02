@@ -269,7 +269,7 @@
         <button class="cap-btn" id="btn-nav-stock"><span class="emoji">📦</span>Stock</button>
         <button class="cap-btn" id="btn-nav-pedidos"><span class="emoji">🛒</span>Pedidos<span class="badge-alertas oculto" id="badge-pedidos">0</span></button>
         <button class="cap-btn" id="btn-nav-produccion"><span class="emoji">🥣</span>Producción<span class="badge-alertas oculto" id="badge-produccion">0</span></button>
-        <button class="cap-btn" id="btn-nav-horas"><span class="emoji">⏱️</span>Mis horas</button>
+        <button class="cap-btn" id="btn-nav-horas"><span class="emoji">⏱️</span>Mis horas<span id="horas-home-total" style="display:block;font-size:12px;font-weight:600;color:var(--gris)"></span></button>
         <button class="cap-btn oculto" id="btn-nav-sueldos"><span class="emoji">💵</span>Sueldos</button>
         <button class="cap-btn oculto" id="btn-nav-ventas"><span class="emoji">📈</span>Ventas Postberry</button>
         <button class="cap-btn oculto" id="btn-nav-precios"><span class="emoji">🏷️</span>Insumos y precios</button>
@@ -873,7 +873,8 @@
     <label>Mes</label>
     <input type="month" id="horas-mes">
     <div class="card" style="margin-top:10px">
-      <div class="desglose-fila"><span>Total de horas del mes</span><span id="horas-total">-</span></div>
+      <div class="desglose-fila"><span>Horas del mes hasta ahora</span><span id="horas-total" style="font-weight:700">-</span></div>
+      <div class="aviso" style="margin-top:2px">Se actualiza solo. Si tenés un turno abierto, cuenta hasta este momento.</div>
       <div id="horas-lista" style="margin-top:8px"></div>
     </div>
     <details class="grupo-stock oculto" id="horas-equipo-det" style="margin-top:14px">
@@ -1261,6 +1262,7 @@ function irAHome() {
   actualizarBadgeAlertas();
   actualizarBadgePedidos();
   actualizarBadgeProduccion();
+  actualizarHorasHome();
 }
 
 // ---------- Config ----------
@@ -4777,7 +4779,7 @@ const diaSemana = (iso) => DIAS_CORTOS[new Date(iso + 'T12:00:00').getDay()];
 let HORAS_PERSONA = null; // { id, nombre, data } de la persona abierta en "Horas del equipo"
 
 function turnoHtml(t, conEditar) {
-  const hs = t.tipo === 'licencia' ? 'Licencia · ' + fmtHs(t.horas) : (t.abierto ? 'en curso' : fmtHs(t.horas));
+  const hs = t.tipo === 'licencia' ? 'Licencia · ' + fmtHs(t.horas) : (t.abierto ? 'en curso · ' + fmtHs(t.horas) : fmtHs(t.horas));
   const rango = t.tipo === 'licencia' ? 'Licencia médica' : `${t.entrada} a ${t.salida || '…'}`;
   return `<div class="lista-item"><div><div class="nombre">${diaSemana(t.fecha)} ${fmtFechaCorta(t.fecha)}${t.feriado ? ' 🎌' : ''}</div>
     <div class="sub">${rango}${t.nota ? ' · ' + escaparHtml(t.nota) : ''}</div></div>
@@ -4970,6 +4972,22 @@ document.getElementById('btn-personal-guardar').onclick = async () => {
   document.getElementById('personal-form').classList.add('oculto');
   cargarPersonal(); cargarHorasEquipo();
 };
+// Horas del mes en el botón del inicio y refresco automático de la pantalla
+async function actualizarHorasHome() {
+  const el = document.getElementById('horas-home-total');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.rpc('horas_mes', { p_mes: mesActualYM() + '-01' });
+    el.textContent = !error && data && data.empleado ? fmtHs(data.total) + ' este mes' : '';
+  } catch (e) { el.textContent = ''; }
+}
+setInterval(() => {
+  if (document.hidden || !USUARIO_ACTUAL) return;
+  if (!document.getElementById('pantalla-horas').classList.contains('oculto')) {
+    cargarHorasMes(); cargarHorasEstado();
+    if (esGestor() && document.getElementById('horas-persona').classList.contains('oculto')) cargarHorasEquipo();
+  } else if (!document.getElementById('pantalla-home').classList.contains('oculto')) actualizarHorasHome();
+}, 60000);
 document.getElementById('btn-nav-horas').onclick = abrirHoras;
 document.getElementById('btn-volver-horas').onclick = () => irAHome();
 
