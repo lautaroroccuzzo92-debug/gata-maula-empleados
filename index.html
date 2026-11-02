@@ -877,6 +877,16 @@
       <div class="aviso" style="margin-top:2px">Se actualiza solo. Si tenés un turno abierto, cuenta hasta este momento.</div>
       <div id="horas-lista" style="margin-top:8px"></div>
     </div>
+    <details class="grupo-stock" id="horas-historial-det" style="margin-top:14px">
+      <summary><span>📚 Historial de horas</span></summary>
+      <div class="grupo-stock-body">
+        <div id="hist-persona-wrap" class="oculto"><label style="margin-top:0">Persona</label><select id="hist-persona"><option value="">Todos juntos</option></select></div>
+        <div id="hist-lista" style="margin-top:8px">Se carga al abrir.</div>
+        <label>Buscar por día</label>
+        <div style="display:flex;gap:8px"><input type="date" id="hist-dia" style="flex:1"><button class="big" id="btn-hist-dia" style="width:auto;margin:0;padding:10px 16px">Buscar</button></div>
+        <div id="hist-dia-res" style="margin-top:8px"></div>
+      </div>
+    </details>
     <details class="grupo-stock oculto" id="horas-equipo-det" style="margin-top:14px">
       <summary><span>👥 Horas del equipo</span></summary>
       <div class="grupo-stock-body">
@@ -898,6 +908,8 @@
           <div id="pers-admin" class="oculto">
             <label>Usuario de la app (para que marque sus propias horas)</label>
             <select id="pers-usuario"><option value="">Sin usuario</option></select>
+            <label>Fecha de ingreso (para el aguinaldo)</label>
+            <input type="date" id="pers-ingreso">
             <label>Valor hora ($), rige desde hoy</label>
             <input type="number" step="0.01" id="pers-valor">
           </div>
@@ -925,6 +937,12 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
           <input type="date" id="feriado-fecha" style="flex:1;min-width:140px">
           <input type="text" id="feriado-nombre" placeholder="Nombre (opcional)" style="flex:2;min-width:140px">
+          <select id="feriado-tipo" style="flex:1;min-width:140px">
+            <option value="nacional">Nacional (doble)</option>
+            <option value="provincial">Provincial de Córdoba (doble)</option>
+            <option value="local">Local, ciudad de Córdoba (doble)</option>
+            <option value="no_laborable">Día no laborable (NO doble)</option>
+          </select>
         </div>
         <button class="agregar-producto" id="btn-feriado-agregar">+ Agregar feriado</button>
       </div>
@@ -4779,7 +4797,7 @@ const diaSemana = (iso) => DIAS_CORTOS[new Date(iso + 'T12:00:00').getDay()];
 let HORAS_PERSONA = null; // { id, nombre, data } de la persona abierta en "Horas del equipo"
 
 function turnoHtml(t, conEditar) {
-  const hs = t.tipo === 'licencia' ? 'Licencia · ' + fmtHs(t.horas) : (t.abierto ? 'en curso · ' + fmtHs(t.horas) : fmtHs(t.horas));
+  const hs = t.tipo === 'licencia' ? 'Licencia · ' + fmtHs(t.horas) : (t.abierto ? 'en curso · ' + fmtHs(t.horas) : (t.sin_salida ? '⚠️ sin salida' : fmtHs(t.horas)));
   const rango = t.tipo === 'licencia' ? 'Licencia médica' : `${t.entrada} a ${t.salida || '…'}`;
   return `<div class="lista-item"><div><div class="nombre">${diaSemana(t.fecha)} ${fmtFechaCorta(t.fecha)}${t.feriado ? ' 🎌' : ''}</div>
     <div class="sub">${rango}${t.nota ? ' · ' + escaparHtml(t.nota) : ''}</div></div>
@@ -4942,6 +4960,7 @@ async function abrirFormPersonal(p) {
   document.getElementById('pers-casual').checked = p ? p.casual : false;
   document.getElementById('pers-activo').checked = p ? p.activo : true;
   document.getElementById('pers-valor').value = p && p.valor_hora != null ? p.valor_hora : '';
+  document.getElementById('pers-ingreso').value = p && p.fecha_ingreso ? p.fecha_ingreso : '';
   document.getElementById('pers-res').innerHTML = '';
   const admin = esAdminHoras();
   document.getElementById('pers-admin').classList.toggle('oculto', !admin);
@@ -4961,7 +4980,8 @@ document.getElementById('btn-personal-guardar').onclick = async () => {
   const { data, error } = await sb.rpc('empleado_guardar', {
     p_id: document.getElementById('pers-id').value || null, p_nombre: document.getElementById('pers-nombre').value,
     p_casual: document.getElementById('pers-casual').checked, p_activo: document.getElementById('pers-activo').checked,
-    p_usuario: admin ? (document.getElementById('pers-usuario').value || null) : null
+    p_usuario: admin ? (document.getElementById('pers-usuario').value || null) : null,
+    p_ingreso: admin ? (document.getElementById('pers-ingreso').value || null) : null
   });
   if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(error.message)}</div>`; return; }
   const valor = document.getElementById('pers-valor').value;
@@ -4972,6 +4992,40 @@ document.getElementById('btn-personal-guardar').onclick = async () => {
   document.getElementById('personal-form').classList.add('oculto');
   cargarPersonal(); cargarHorasEquipo();
 };
+// Historial de horas y búsqueda por día
+async function cargarHistorialHoras() {
+  const cont = document.getElementById('hist-lista');
+  const gestor = esGestor();
+  document.getElementById('hist-persona-wrap').classList.toggle('oculto', !gestor);
+  const sel = document.getElementById('hist-persona');
+  if (gestor && sel.options.length <= 1 && PERSONAL.length) sel.innerHTML = '<option value="">Todos juntos</option>' + PERSONAL.map(p => `<option value="${p.id}">${escaparHtml(p.nombre)}${p.activo ? '' : ' (ya no trabaja)'}</option>`).join('');
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await sb.rpc('horas_historial', { p_empleado: gestor ? (sel.value || null) : null });
+  if (error) { cont.innerHTML = `<div class="aviso">${escaparHtml(error.message)}</div>`; return; }
+  if (!data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay horas anotadas.</div>'; return; }
+  const total = data.reduce((s, m) => s + Number(m.horas || 0), 0);
+  cont.innerHTML = `<div class="lista-item"><div class="nombre">Total de todos los meses</div><div class="nombre">${fmtHs(total)}</div></div>` +
+    data.map(m => `<div class="lista-item"><div><div class="nombre">${etiquetaMes(m.mes)}</div><div class="sub">${m.turnos} turnos${gestor && !sel.value ? ' · ' + m.personas + ' personas' : ''}</div></div>
+      <div style="text-align:right;flex:none"><div class="nombre">${fmtHs(m.horas)}</div><button type="button" class="secundario btn-hist-mes" data-mes="${m.mes}" style="width:auto;padding:4px 10px;margin:4px 0 0">Ver mes</button></div></div>`).join('');
+  cont.querySelectorAll('.btn-hist-mes').forEach(b => { b.onclick = () => {
+    document.getElementById('horas-mes').value = b.dataset.mes;
+    cargarHorasMes();
+    if (gestor) { cargarHorasEquipo(); if (sel.value) { document.getElementById('horas-equipo-det').open = true; abrirPersonaHoras(sel.value, sel.options[sel.selectedIndex].text); } }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }; });
+}
+document.getElementById('hist-persona').onchange = cargarHistorialHoras;
+document.getElementById('horas-historial-det').addEventListener('toggle', (ev) => { if (ev.target.open) cargarHistorialHoras(); });
+document.getElementById('btn-hist-dia').onclick = async () => {
+  const cont = document.getElementById('hist-dia-res'), f = document.getElementById('hist-dia').value;
+  if (!f) { cont.innerHTML = '<div class="aviso">Elegí un día.</div>'; return; }
+  cont.innerHTML = 'Buscando...';
+  const { data, error } = await sb.rpc('horas_dia', { p_fecha: f });
+  if (error) { cont.innerHTML = `<div class="aviso">${escaparHtml(error.message)}</div>`; return; }
+  const fer = data.feriado ? `<div class="aviso" style="margin-top:0">🎌 ${escaparHtml(data.feriado.nombre)}${data.feriado.paga_doble ? ' (se paga doble)' : ' (no se paga doble)'}</div>` : '';
+  cont.innerHTML = fer + ((data.turnos || []).map(t => `<div class="lista-item"><div><div class="nombre">${escaparHtml(t.nombre)}</div><div class="sub">${t.tipo === 'licencia' ? 'Licencia médica' : t.entrada + ' a ' + (t.salida || '…')}${t.nota ? ' · ' + escaparHtml(t.nota) : ''}</div></div><div class="nombre">${fmtHs(t.horas)}</div></div>`).join('') || '<div class="aviso">No hay turnos anotados ese día.</div>');
+};
+
 // Horas del mes en el botón del inicio y refresco automático de la pantalla
 async function actualizarHorasHome() {
   const el = document.getElementById('horas-home-total');
@@ -5030,8 +5084,9 @@ async function cargarSueldos() {
         ${conf ? '' : '<button type="button" class="secundario btn-sv-valor" style="width:auto;padding:10px 12px;margin:0">Guardar valor</button>'}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div><label>Aguinaldo</label><input type="number" step="0.01" class="sj-ag" value="${Number(f.aguinaldo) || ''}" ${dis}></div>
-        <div><label>Bono</label><input type="number" step="0.01" class="sj-bo" value="${Number(f.bono) || ''}" ${dis}></div>
+        <div><label>Aguinaldo${[6, 12].includes(Number(ym.slice(5, 7))) && !conf ? ' <a href="#" class="btn-sj-ag-sug" style="font-size:12px">calcular</a>' : ''}</label><input type="number" step="0.01" class="sj-ag" value="${Number(f.aguinaldo) || ''}" ${dis}></div>
+        <div><label>Vacaciones</label><input type="number" step="0.01" class="sj-va" value="${Number(f.vacaciones) || ''}" ${dis}></div>
+        <div><label>Bono por rendimiento</label><input type="number" step="0.01" class="sj-bo" value="${Number(f.bono) || ''}" ${dis}></div>
         <div><label>Descuentos / adelantos</label><input type="number" step="0.01" class="sj-de" value="${Number(f.descuentos) || ''}" ${dis}></div>
         <div><label>Por transferencia</label><input type="number" step="0.01" class="sj-tr" value="${Number(f.transferencia) || ''}" ${dis}></div>
       </div>
@@ -5049,9 +5104,19 @@ async function cargarSueldos() {
     const res = card.querySelector('.sj-res');
     const g = card.querySelector('.btn-sj-guardar');
     if (g) g.onclick = async () => {
-      const { error: e } = await sb.rpc('sueldos_ajuste_guardar', { p_mes: ym + '-01', p_empleado: emp, p_aguinaldo: val('.sj-ag'), p_bono: val('.sj-bo'), p_descuentos: val('.sj-de'), p_transferencia: val('.sj-tr'), p_nota: card.querySelector('.sj-nota').value });
+      const { error: e } = await sb.rpc('sueldos_ajuste_guardar', { p_mes: ym + '-01', p_empleado: emp, p_aguinaldo: val('.sj-ag'), p_vacaciones: val('.sj-va'), p_bono: val('.sj-bo'), p_descuentos: val('.sj-de'), p_transferencia: val('.sj-tr'), p_nota: card.querySelector('.sj-nota').value });
       if (e) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(e.message)}</div>`; return; }
       cargarSueldos();
+    };
+    const sug = card.querySelector('.btn-sj-ag-sug');
+    if (sug) sug.onclick = async (ev) => {
+      ev.preventDefault();
+      const { data: ag, error: e } = await sb.rpc('sueldos_aguinaldo_sugerido', { p_mes: ym + '-01' });
+      if (e) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(e.message)}</div>`; return; }
+      const mio = (ag || []).find(x => x.empleado_id === emp);
+      if (!mio) { res.innerHTML = '<div class="aviso">No pude calcular el aguinaldo de esta persona.</div>'; return; }
+      card.querySelector('.sj-ag').value = mio.aguinaldo;
+      res.innerHTML = `<div class="aviso">Aguinaldo sugerido: 50% de ${fmtPesos(mio.mejor_mes)} (su mejor mes del semestre) × ${mio.dias}/${mio.dias_semestre} días = ${fmtPesos(mio.aguinaldo)}. Revisalo y tocá "Guardar ajustes".</div>`;
     };
     const gv = card.querySelector('.btn-sv-valor');
     if (gv) gv.onclick = async () => {
@@ -5091,7 +5156,8 @@ async function cargarFeriados() {
   const ym = document.getElementById('sueldos-mes').value || mesActualYM();
   const { data, error } = await sb.rpc('feriados_listar', { p_anio: Number(ym.slice(0, 4)) });
   if (error) { cont.innerHTML = `<div class="aviso">${escaparHtml(error.message)}</div>`; return; }
-  cont.innerHTML = (data || []).map(f => `<div class="lista-item"><div><div class="nombre">${diaSemana(f.fecha)} ${fmtFechaCorta(f.fecha)}</div><div class="sub">${escaparHtml(f.nombre)}</div></div>
+  const ETQ_FER = { nacional: 'nacional · doble', provincial: 'provincial · doble', local: 'local · doble', no_laborable: 'no laborable · NO doble' };
+  cont.innerHTML = (data || []).map(f => `<div class="lista-item"><div><div class="nombre">${diaSemana(f.fecha)} ${fmtFechaCorta(f.fecha)}</div><div class="sub">${escaparHtml(f.nombre)} · ${ETQ_FER[f.tipo] || f.tipo}</div></div>
     <button type="button" class="secundario btn-fer-borrar" data-f="${f.fecha}" style="width:auto;padding:4px 10px;flex:none">Quitar</button></div>`).join('') || '<div class="aviso">No hay feriados cargados en este año. Agregalos abajo.</div>';
   cont.querySelectorAll('.btn-fer-borrar').forEach(b => { b.onclick = async () => {
     const { error: e } = await sb.rpc('feriado_borrar', { p_fecha: b.dataset.f });
@@ -5102,7 +5168,7 @@ async function cargarFeriados() {
 document.getElementById('btn-feriado-agregar').onclick = async () => {
   const f = document.getElementById('feriado-fecha').value;
   if (!f) { alert('Elegí la fecha del feriado.'); return; }
-  const { error } = await sb.rpc('feriado_guardar', { p_fecha: f, p_nombre: document.getElementById('feriado-nombre').value });
+  const { error } = await sb.rpc('feriado_guardar', { p_fecha: f, p_nombre: document.getElementById('feriado-nombre').value, p_tipo: document.getElementById('feriado-tipo').value, p_paga_doble: document.getElementById('feriado-tipo').value !== 'no_laborable' });
   if (error) { alert(error.message); return; }
   document.getElementById('feriado-fecha').value = ''; document.getElementById('feriado-nombre').value = '';
   cargarFeriados(); cargarSueldos();
