@@ -1182,6 +1182,14 @@
     <div class="card">
       <div class="aviso" style="margin-top:0">No hay nada para configurar en el celular. La lectura de facturas y el asistente usan la clave de la IA guardada en el servidor, así que ya no hace falta cargarla acá.</div>
     </div>
+    <div class="card oculto" id="card-respaldo">
+      <h3 style="margin-top:0">💾 Copia de seguridad</h3>
+      <div class="aviso" style="margin-top:0">Baja todos los datos de la app (facturas, caja, stock, recetas, horas, sueldos, ventas, etc.). Guardala en tu computadora o en Google Drive. Además, todos los días se hace una copia automática aparte.</div>
+      <button class="big" id="btn-respaldo-excel" style="margin-top:10px">Descargar copia para ver en Excel</button>
+      <button class="secundario" id="btn-respaldo-json" style="margin-top:8px">Descargar copia completa (.json, para restaurar)</button>
+      <div id="respaldo-estado" style="margin-top:10px;font-size:13px"></div>
+      <div id="respaldo-ultimo" style="margin-top:6px;font-size:12px;color:var(--gris)"></div>
+    </div>
     <button class="big" id="btn-cerrar-config">Volver</button>
   </div>
 
@@ -1378,9 +1386,99 @@ function irAHome() {
 
 // ---------- Config ----------
 document.getElementById('btn-config').onclick = () => {
+  const esAdmin = USUARIO_ACTUAL && USUARIO_ACTUAL.rol === 'admin';
+  document.getElementById('card-respaldo').classList.toggle('oculto', !esAdmin);
+  let ultimo = '';
+  try { ultimo = localStorage.getItem('gm_ultimo_respaldo') || ''; } catch (e) { /* sin almacenamiento local */ }
+  document.getElementById('respaldo-ultimo').textContent = ultimo ? 'Última copia bajada desde este dispositivo: ' + ultimo : 'Todavía no bajaste ninguna copia desde este dispositivo.';
   mostrarPantalla('config');
 };
 document.getElementById('btn-cerrar-config').onclick = () => mostrarPantalla('home');
+
+// ---------- Copia de seguridad (solo admin) ----------
+// Junta todas las tablas de la app tramo por tramo (la base devuelve como máximo 5000 filas por llamada).
+async function armarRespaldo(estado) {
+  const { data: tablas, error } = await sb.rpc('respaldo_tablas');
+  if (error) throw error;
+  const datos = {};
+  const conteos = {};
+  for (let t = 0; t < tablas.length; t++) {
+    const nombre = tablas[t].tabla;
+    const total = Number(tablas[t].filas);
+    const filas = [];
+    while (filas.length < total) {
+      estado(`Bajando ${nombre} (${t + 1} de ${tablas.length}): ${filas.length} de ${total} filas…`);
+      const { data, error: e2 } = await sb.rpc('respaldo_pagina', { p_tabla: nombre, p_desde: filas.length, p_cuantos: 2000 });
+      if (e2) throw e2;
+      if (!data || !data.length) break;
+      for (const f of data) filas.push(f);
+    }
+    datos[nombre] = filas;
+    conteos[nombre] = { en_la_base: total, descargadas: filas.length };
+  }
+  return { datos, conteos };
+}
+function guardarArchivoDescargado(blob, nombre) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+async function descargarRespaldo(formato) {
+  const est = document.getElementById('respaldo-estado');
+  const btns = [document.getElementById('btn-respaldo-excel'), document.getElementById('btn-respaldo-json')];
+  btns.forEach(b => { b.disabled = true; });
+  est.style.color = ''; est.textContent = 'Preparando la copia…';
+  try {
+    const { datos, conteos } = await armarRespaldo(m => { est.textContent = m; });
+    const ahora = new Date();
+    const sello = ahora.getFullYear() + '-' + String(ahora.getMonth() + 1).padStart(2, '0') + '-' + String(ahora.getDate()).padStart(2, '0') + '_' + String(ahora.getHours()).padStart(2, '0') + String(ahora.getMinutes()).padStart(2, '0');
+    const incompletas = Object.keys(conteos).filter(k => conteos[k].descargadas < conteos[k].en_la_base);
+    if (formato === 'json') {
+      const txt = JSON.stringify({ app: 'gata-maula', generado: ahora.toISOString(), conteos, tablas: datos });
+      guardarArchivoDescargado(new Blob([txt], { type: 'application/json' }), `gata-maula-copia-${sello}.json`);
+    } else {
+      const wb = XLSX.utils.book_new();
+      const usados = {};
+      Object.keys(datos).forEach(nombre => {
+        const filas = datos[nombre].map(f => {
+          const o = {};
+          Object.keys(f).forEach(c => {
+            let v = f[c];
+            if (v !== null && typeof v === 'object') v = JSON.stringify(v);
+            if (typeof v === 'string' && v.length > 32000) v = v.slice(0, 32000);
+            o[c] = v;
+          });
+          return o;
+        });
+        let hoja = nombre.slice(0, 31);
+        let n = 2;
+        while (usados[hoja]) { hoja = nombre.slice(0, 28) + '_' + n; n++; }
+        usados[hoja] = true;
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas.length ? filas : [{}]), hoja);
+      });
+      XLSX.writeFile(wb, `gata-maula-copia-${sello}.xlsx`);
+    }
+    const resumen = Object.keys(conteos).map(k => `${k}: ${conteos[k].descargadas}`).join(' · ');
+    if (incompletas.length) {
+      est.style.color = 'var(--rojo, #c0392b)';
+      est.textContent = 'Atención: estas tablas no bajaron completas: ' + incompletas.join(', ') + '. Probá de nuevo.';
+    } else {
+      est.style.color = 'var(--verde, #2e7d32)';
+      est.textContent = '✔ Copia lista. Filas por tabla → ' + resumen;
+      try { localStorage.setItem('gm_ultimo_respaldo', ahora.toLocaleString('es-AR')); } catch (e) { /* sin almacenamiento local */ }
+      document.getElementById('respaldo-ultimo').textContent = 'Última copia bajada desde este dispositivo: ' + ahora.toLocaleString('es-AR');
+    }
+  } catch (e) {
+    est.style.color = 'var(--rojo, #c0392b)';
+    est.textContent = 'No se pudo armar la copia: ' + (e.message || e) + (String(e.message || e).includes('respaldo_') ? ' (falta correr la migración 0065 en Supabase)' : '');
+  } finally {
+    btns.forEach(b => { b.disabled = false; });
+  }
+}
+document.getElementById('btn-respaldo-excel').onclick = () => descargarRespaldo('excel');
+document.getElementById('btn-respaldo-json').onclick = () => descargarRespaldo('json');
 
 // ---------- Captura de imágenes ----------
 function agregarArchivoBase64(mediaType, base64, previewUrl) {

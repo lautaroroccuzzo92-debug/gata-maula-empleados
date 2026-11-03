@@ -6,7 +6,7 @@ export const PANTALLAS_IR = ['mercaderia', 'desperdicio', 'stock', 'pedidos', 'r
 
 export const GUIA = `GUÍA DE LA APP (lo único que existe; no inventes pantallas ni botones que no estén acá)
 
-Entrada: se entra con usuario y contraseña (cada persona tiene la suya). Arriba a la izquierda está "🔓 Salir" y arriba a la derecha "⚙️" (ajustes). Después del ingreso se ve la pantalla de inicio con botones. Cada pantalla tiene un botón "Volver" abajo.
+Entrada: se entra con usuario y contraseña (cada persona tiene la suya). Arriba a la izquierda está "🔓 Salir" y arriba a la derecha "⚙️" (ajustes; ahí el admin tiene "Copia de seguridad": descarga todos los datos de la app en Excel o en un archivo completo; además todos los días se hace una copia automática aparte). Después del ingreso se ve la pantalla de inicio con botones. Cada pantalla tiene un botón "Volver" abajo.
 Las listas largas (stock, pedidos, calendario de pagos, lotes de producción, últimos cierres, alertas, etc.) vienen plegadas: se tocan para desplegar y muestran la cantidad en el título.
 Quién ve qué: el ADMIN ve todo. El ENCARGADO ve todo menos "Estado de resultados" y "Calendario de pagos". COCINA solo ve: Recetas (sin precios; puede crear y editar las suyas), Producción y vencimientos, Desperdicio, Stock, Pedidos y Mis horas. "Mis horas" lo ven todos; "Sueldos" solo el ADMIN.
 
