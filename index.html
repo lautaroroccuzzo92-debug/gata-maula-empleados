@@ -618,6 +618,7 @@
   <!-- PANTALLA: STOCK (lectura) -->
   <div id="pantalla-stock" class="oculto">
     <h2 class="section-title" style="margin-top:0">Stock</h2>
+    <button class="secundario oculto" id="btn-stock-contar" style="margin-top:0">🧮 Contar stock</button>
     <input type="text" id="stock-buscador" placeholder="Buscar insumo...">
     <div id="stock-form-pedido" class="card oculto">
       <h2 class="section-title" style="margin-top:0" id="sp-titulo">Mínimo y pedido</h2>
@@ -626,7 +627,7 @@
       <input type="number" step="0.01" min="0" id="sp-minimo">
       <div class="aviso">Cuando el stock baje de este número, aparece en la lista de pedidos. Con 0 no se avisa.</div>
       <label>Se mide en</label>
-      <select id="sp-unidad"><option value="kg">Kilos</option><option value="unidad">Unidades</option></select>
+      <select id="sp-unidad"><option value="kg">Kilos</option><option value="unidad">Unidades</option><option value="litro">Litros</option></select>
       <label>Proveedor al que se le pide</label>
       <input type="text" id="sp-proveedor" list="sp-proveedores-lista" autocomplete="off">
       <datalist id="sp-proveedores-lista"></datalist>
@@ -641,6 +642,70 @@
     </div>
     <div id="stock-lista"></div>
     <button class="secundario" id="btn-volver-stock">Volver</button>
+  </div>
+
+  <!-- PANTALLA: CONTAR STOCK (admin y encargado) -->
+  <div id="pantalla-contar" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Contar stock</h2>
+    <div class="aviso">Contá lo que hay en el local y cargalo. Se guardan solo los productos que completes. Desde la hora del conteo, la app descuenta sola lo que se vende según Postberry. Para botellas abiertas usá decimales (2,5 = dos botellas y media).</div>
+    <div class="card">
+      <div class="fila2">
+        <div><label style="margin-top:0">Rubro</label><select id="contar-rubro"></select></div>
+        <div><label style="margin-top:0">Contado el</label><input type="datetime-local" id="contar-fecha"></div>
+      </div>
+      <div class="aviso">Si contaste a las 3 de la mañana, poné esa hora: lo vendido antes de ese momento no se descuenta.</div>
+    </div>
+    <input type="text" id="contar-buscador" placeholder="Buscar producto...">
+    <div id="contar-lista"></div>
+    <div id="contar-res"></div>
+    <button class="big" id="btn-contar-guardar">Guardar conteo</button>
+    <button class="secundario" id="btn-volver-contar">Volver al stock</button>
+  </div>
+
+  <!-- PANTALLA: DESCUENTO DE STOCK POR VENTAS (admin y encargado) -->
+  <div id="pantalla-descuento" class="oculto">
+    <h2 class="section-title" style="margin-top:0">Descuento de stock por ventas</h2>
+    <div class="aviso" id="desc-estado">Cargando...</div>
+    <div id="desc-alertas"></div>
+    <div class="card">
+      <button class="big" id="btn-desc-auto" style="margin-top:0">Vincular solo lo que falta</button>
+      <button class="secundario" id="btn-desc-recalcular">Recalcular con las ventas cargadas</button>
+      <div class="aviso" id="desc-res"></div>
+    </div>
+
+    <div id="desc-form" class="card oculto">
+      <h3 style="margin:0 0 6px" id="desc-form-titulo">Producto</h3>
+      <div class="aviso" style="margin-top:0">Elegí qué descuenta del stock cada vez que se vende este producto de Postberry.</div>
+      <div id="desc-form-filas"></div>
+      <datalist id="desc-ins-lista"></datalist>
+      <button class="agregar-producto" id="btn-desc-fila" type="button">+ Otro producto del stock</button>
+      <div id="desc-form-res"></div>
+      <button class="big" id="btn-desc-guardar">Guardar</button>
+      <button class="secundario" id="btn-desc-nodescuenta" type="button">Este producto no descuenta stock</button>
+      <button class="secundario" id="btn-desc-cancelar" type="button">Cancelar</button>
+    </div>
+
+    <details class="grupo-stock" id="desc-sin-det" open>
+      <summary><span>Productos de Postberry sin vincular <span class="grupo-cant" id="desc-sin-cant"></span></span></summary>
+      <div class="grupo-stock-body" id="desc-sin"></div>
+    </details>
+    <details class="grupo-stock">
+      <summary><span>Productos ya vinculados <span class="grupo-cant" id="desc-vinc-cant"></span></span></summary>
+      <div class="grupo-stock-body"><input type="text" id="desc-vinc-buscar" placeholder="Buscar producto de Postberry..."><div id="desc-vinc"></div></div>
+    </details>
+    <details class="grupo-stock">
+      <summary><span>Tamaño de botella y medida (ml)</span></summary>
+      <div class="grupo-stock-body"><div class="aviso" style="margin-top:0">"Trae" son los ml de una unidad del stock (botella 750, bag in box 5000). "Medida" son los ml que se sirven en el vaso. A cada medida se le suma un 4,17% de merma (8 vasos por botella de 750 ml).</div><div id="desc-ml"></div></div>
+    </details>
+    <details class="grupo-stock">
+      <summary><span>Lo que se usó según las ventas</span></summary>
+      <div class="grupo-stock-body">
+        <div class="fila2"><div><label style="margin-top:0">Desde</label><input type="date" id="desc-c-desde"></div><div><label style="margin-top:0">Hasta</label><input type="date" id="desc-c-hasta"></div></div>
+        <button class="big" id="btn-desc-consumo" style="margin-top:8px">Ver consumo</button>
+        <div id="desc-consumo"></div>
+      </div>
+    </details>
+    <button class="secundario" id="btn-volver-descuento">Volver</button>
   </div>
 
   <!-- PANTALLA: PEDIDOS (insumos bajo el minimo, por proveedor) -->
@@ -671,6 +736,7 @@
         <div><label style="margin-top:0">Hasta</label><input type="date" id="ventas-hasta"></div>
       </div>
       <button class="big" id="btn-ventas-ver" style="margin-top:8px">Ver análisis</button>
+      <button class="secundario" id="btn-ventas-descuento">📉 Descuento de stock por ventas</button>
       <div class="aviso">El día de negocio termina a las 6 de la mañana: lo vendido de madrugada cuenta para el día anterior.</div>
     </div>
     <div id="ventas-resultado"></div>
@@ -1233,7 +1299,7 @@ function categoriasDisponibles() {
 }
 
 // ---------- Navegación entre pantallas ----------
-const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','ventas','recetas-ver','produccion','horas','sueldos','config'];
+const pantallas = ['empleado','home','cargando','revision','resultado','desperdicio','recetas','caja','ingresos','stock','alertas','precios','calendario','eerr','pedidos','ventas','recetas-ver','produccion','horas','sueldos','contar','descuento','config'];
 function mostrarPantalla(nombre) {
   pantallas.forEach(p => {
     document.getElementById('pantalla-' + p).classList.toggle('oculto', p !== nombre);
@@ -2029,6 +2095,7 @@ document.getElementById('btn-nav-stock').onclick = async () => {
     cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`;
     STOCK_DATA = [];
   }
+  document.getElementById('btn-stock-contar').classList.toggle('oculto', !esGestor());
   mostrarPantalla('stock');
 };
 
@@ -2122,7 +2189,7 @@ function renderStockLista(filtro) {
 document.getElementById('btn-volver-stock').onclick = () => irAHome();
 
 // ---------- Stock mínimo y pedidos ----------
-const unidadTxtStock = (s) => s.unidad === 'kg' ? 'kg' : (s.unidad === 'unidad' ? 'u' : '');
+const unidadTxtStock = (s) => s.unidad === 'kg' ? 'kg' : (s.unidad === 'unidad' ? 'u' : (s.unidad === 'litro' ? 'L' : ''));
 const estaBajoMinimo = (s) => Number(s.stock_minimo) > 0 && Number(s.cantidad_actual) <= Number(s.stock_minimo);
 const fmtCant = (n) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 3 });
 let PEDIDOS_TEXTOS = {};
@@ -2738,6 +2805,16 @@ document.getElementById('btn-ventas-subir').onclick = async () => {
       }
     }
     prog.textContent = '✅ Listo. Ventas cargadas.';
+    const detalle = VENTAS_ARCHIVOS.find(a => a.tipo === 'detalle');
+    if (detalle && detalle.filas.length) {
+      const fechas = detalle.filas.map(r => r.fecha).sort();
+      try {
+        prog.textContent = 'Descontando del stock lo vendido...';
+        const { data: ap, error: eAp } = await sb.rpc('pos_aplicar_consumo', { p_desde: fechas[0], p_hasta: fechas[fechas.length - 1] });
+        if (eAp) throw new Error(eAp.message);
+        prog.innerHTML = `✅ Listo. Ventas cargadas y stock actualizado (${ap.descontados} descuentos). Revisá en <b>Descuento de stock por ventas</b> si quedó algo sin vincular.`;
+      } catch (eAp2) { prog.textContent = '✅ Ventas cargadas. (No se pudo descontar el stock: ' + eAp2.message + ')'; }
+    }
     document.getElementById('ventas-archivos').value = '';
     document.getElementById('ventas-archivos-info').textContent = '';
     VENTAS_ARCHIVOS = [];
@@ -2833,12 +2910,262 @@ async function verAnalisisVentas() {
 document.getElementById('btn-ventas-ver').onclick = verAnalisisVentas;
 document.getElementById('btn-nav-ventas').onclick = async () => {
   mostrarPantalla('ventas');
-  document.getElementById('ventas-carga').classList.toggle('oculto', !USUARIO_ACTUAL || USUARIO_ACTUAL.rol !== 'admin');
+  document.getElementById('ventas-carga').classList.toggle('oculto', !esGestor());
   const est = await cargarEstadoVentas(true);
   document.getElementById('ventas-resultado').innerHTML = '';
   if (est && est.ventas) await verAnalisisVentas();
 };
 document.getElementById('btn-volver-ventas').onclick = () => irAHome();
+
+// ---------- Contar stock ----------
+const fmtHoraNaive = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/); return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : ''; };
+const fmtHoraConteo = (iso) => iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }).replace(',', '') : '';
+const fechaHoraInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+let CONTAR_DATA = [];
+let CONTAR_VALORES = {};
+
+async function cargarDatosContar() {
+  const cont = document.getElementById('contar-lista');
+  try {
+    CONTAR_DATA = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,unidad,conteo_en,insumos(nombre,marca,subcategoria)').order('insumo_id'));
+  } catch (e) {
+    cont.innerHTML = `<div class="estado-box estado-error">${escaparHtml(e.message)}${/conteo_en/.test(e.message) ? ' — falta correr la migración 0061.' : ''}</div>`;
+    CONTAR_DATA = [];
+    return;
+  }
+  const rubros = ORDEN_SUBCATEGORIAS.filter(r => CONTAR_DATA.some(s => s.insumos?.subcategoria === r));
+  const sel = document.getElementById('contar-rubro');
+  const previo = sel.value;
+  sel.innerHTML = rubros.map(r => `<option value="${r}">${escaparHtml(ETIQUETA_SUBCATEGORIA[r] || r)}</option>`).join('');
+  if (previo && rubros.includes(previo)) sel.value = previo;
+  renderContar();
+}
+function renderContar() {
+  const cont = document.getElementById('contar-lista');
+  const rubro = document.getElementById('contar-rubro').value;
+  const q = normalizarTexto(document.getElementById('contar-buscador').value.trim());
+  const items = CONTAR_DATA.filter(s => (q ? coincideInsumo(s.insumos || {}, q) : s.insumos?.subcategoria === rubro))
+    .sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || ''));
+  if (!items.length) { cont.innerHTML = '<div class="aviso">No hay productos para mostrar.</div>'; return; }
+  cont.innerHTML = items.map(s => {
+    const u = unidadTxtStock(s);
+    const nombre = [s.insumos?.marca, s.insumos?.nombre].filter(Boolean).join(' ');
+    const v = CONTAR_VALORES[s.insumo_id];
+    return `<div class="lista-item"><div><div class="nombre">${escaparHtml(nombre)}</div>
+      <div class="sub">En la app: ${fmtCant(s.cantidad_actual)} ${u} · ${s.conteo_en ? 'último conteo ' + fmtHoraConteo(s.conteo_en) : '<b>sin conteo todavía</b>'}</div></div>
+      <div class="stock-edit-wrap"><input type="number" step="0.01" min="0" class="contar-input" data-id="${s.insumo_id}" placeholder="¿Cuántos hay?" value="${v !== undefined ? escaparHtml(v) : ''}"><span class="sub">${u}</span></div></div>`;
+  }).join('');
+  cont.querySelectorAll('.contar-input').forEach(inp => { inp.oninput = () => { CONTAR_VALORES[inp.dataset.id] = inp.value; }; });
+}
+async function abrirContar() {
+  mostrarPantalla('contar');
+  document.getElementById('contar-fecha').value = fechaHoraInput(new Date());
+  document.getElementById('contar-res').innerHTML = '';
+  document.getElementById('contar-lista').innerHTML = 'Cargando...';
+  await cargarDatosContar();
+}
+document.getElementById('btn-stock-contar').onclick = abrirContar;
+document.getElementById('contar-rubro').onchange = renderContar;
+document.getElementById('contar-buscador').addEventListener('input', renderContar);
+document.getElementById('btn-volver-contar').onclick = () => document.getElementById('btn-nav-stock').onclick();
+document.getElementById('btn-contar-guardar').onclick = async () => {
+  const res = document.getElementById('contar-res');
+  const items = Object.entries(CONTAR_VALORES).filter(([, v]) => v !== '' && v != null && !isNaN(Number(v))).map(([id, v]) => ({ insumo_id: id, cantidad: Number(v) }));
+  if (!items.length) { res.innerHTML = '<div class="estado-box estado-error">Completá la cantidad de al menos un producto.</div>'; return; }
+  const f = document.getElementById('contar-fecha').value;
+  const cuando = f ? new Date(f) : new Date();
+  if (isNaN(cuando) || cuando > new Date()) { res.innerHTML = '<div class="estado-box estado-error">Revisá la fecha: no puede ser futura.</div>'; return; }
+  const btn = document.getElementById('btn-contar-guardar');
+  btn.disabled = true;
+  const { data, error } = await sb.rpc('contar_stock', { p_items: items, p_contado_en: cuando.toISOString() });
+  btn.disabled = false;
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  CONTAR_VALORES = {};
+  res.innerHTML = `<div class="estado-box">✅ Se guardó el conteo de ${data.contados} ${data.contados === 1 ? 'producto' : 'productos'}.</div>`;
+  await cargarDatosContar();
+};
+
+// ---------- Descuento de stock por ventas ----------
+let DESC_PROD = [], DESC_INS = [], DESC_EDIT = null, DESC_LABEL2ID = {}, DESC_ID2LABEL = {};
+const DESC_MODOS = { unidad: 'Unidades', medida: 'Medida (ml del vaso)', ml: 'ml fijos' };
+
+function armarEtiquetasInsumos() {
+  DESC_LABEL2ID = {}; DESC_ID2LABEL = {};
+  const lista = DESC_INS.filter(i => !i.es_preparacion);
+  const cuenta = {};
+  lista.forEach(i => { const l = [i.marca, i.nombre].filter(Boolean).join(' '); cuenta[l] = (cuenta[l] || 0) + 1; });
+  lista.forEach(i => {
+    let l = [i.marca, i.nombre].filter(Boolean).join(' ');
+    if (cuenta[l] > 1) l += ` (${ETIQUETA_SUBCATEGORIA[i.subcategoria] || i.subcategoria})`;
+    while (DESC_LABEL2ID[l]) l += ' ·';
+    DESC_LABEL2ID[l] = i.id; DESC_ID2LABEL[i.id] = l;
+  });
+  document.getElementById('desc-ins-lista').innerHTML = Object.keys(DESC_LABEL2ID).sort().map(l => `<option value="${escaparHtml(l)}">`).join('');
+}
+const textoVinculos = (p) => p.omitir ? `No descuenta stock${p.nota ? ' · ' + p.nota : ''}` :
+  (p.vinculos || []).map(v => `${v.insumo} (${v.modo === 'unidad' ? (Number(v.valor) === 1 ? '1 unidad' : v.valor + ' unidades') : v.modo === 'medida' ? 'medida' + (Number(v.valor) === 1 ? '' : ' x' + v.valor) : v.valor + ' ml'}${v.lleva_soda ? ' + soda' : ''})`).join(' + ');
+
+async function cargarDescuento() {
+  const est = document.getElementById('desc-estado');
+  est.textContent = 'Cargando...';
+  try {
+    const [r1, r2] = await Promise.all([sb.rpc('pos_estado_descuento'), sb.rpc('pos_productos_vinculos')]);
+    if (r1.error) throw new Error(r1.error.message);
+    if (r2.error) throw new Error(r2.error.message);
+    DESC_INS = await traerTodo(() => sb.from('insumos').select('id,nombre,marca,subcategoria,ml_por_unidad,ml_medida,es_preparacion').order('nombre').order('id'));
+    DESC_PROD = r2.data || [];
+    armarEtiquetasInsumos();
+    renderDescuento(r1.data);
+  } catch (e) {
+    est.innerHTML = `⚠️ ${escaparHtml(e.message)}${/function|column|does not exist|schema cache/i.test(e.message) ? '<br>Parece que falta correr la migración 0061 en Supabase.' : ''}`;
+  }
+}
+function renderDescuento(e) {
+  document.getElementById('desc-estado').innerHTML = e.ventas_hasta
+    ? `Ventas de Postberry cargadas hasta el <b>${fmtHoraNaive(e.ventas_hasta)}</b>. Stock descontado hasta el <b>${fmtHoraNaive(e.consumo_hasta) || '—'}</b>. Cuando subas nuevas ventas (Ventas Postberry → Subir), el stock se descuenta solo.`
+    : 'Todavía no hay ventas de Postberry cargadas. Subilas en Ventas Postberry.';
+  const al = [];
+  if ((e.sin_conteo || []).length) al.push(`<div class="estado-box estado-error" style="text-align:left">⚠️ A estos productos todavía no se les descuenta stock porque falta un conteo inicial (usá <b>Stock → Contar stock</b>): ${e.sin_conteo.map(x => escaparHtml(x.nombre)).join(', ')}.</div>`);
+  if ((e.sin_ml || []).length) al.push(`<div class="estado-box estado-error" style="text-align:left">⚠️ Faltan los ml (tamaño o medida) de: ${e.sin_ml.map(x => escaparHtml(x.nombre)).join(', ')}. Cargalos en "Tamaño de botella y medida".</div>`);
+  document.getElementById('desc-alertas').innerHTML = al.join('');
+
+  const sin = e.sin_vincular || [];
+  document.getElementById('desc-sin-cant').textContent = `(${sin.length})`;
+  document.getElementById('desc-sin').innerHTML = sin.length
+    ? sin.map(p => `<div class="lista-item"><div><div class="nombre">${escaparHtml(p.producto)}</div><div class="sub">${escaparHtml(p.familia || '')} · ${fmtCant(p.unidades)} vendidos</div></div><button type="button" class="secundario desc-edit" data-p="${escaparHtml(p.producto)}" style="width:auto;margin:0">Vincular</button></div>`).join('')
+    : '<div class="aviso" style="margin-top:0">✅ No queda ningún producto sin vincular.</div>';
+
+  renderDescVinculados();
+  renderDescMl();
+  document.querySelectorAll('.desc-edit').forEach(b => { b.onclick = () => abrirEditorDescuento(b.dataset.p); });
+}
+function renderDescVinculados() {
+  const q = normalizarTexto(document.getElementById('desc-vinc-buscar').value.trim());
+  const vinc = DESC_PROD.filter(p => (p.vinculos || []).length || p.omitir);
+  document.getElementById('desc-vinc-cant').textContent = `(${vinc.length})`;
+  const lista = vinc.filter(p => !q || normalizarTexto(p.producto).includes(q));
+  const cont = document.getElementById('desc-vinc');
+  cont.innerHTML = lista.map(p => `<div class="lista-item"><div><div class="nombre">${escaparHtml(p.producto)}</div><div class="sub">${escaparHtml(textoVinculos(p))}</div></div><button type="button" class="secundario desc-edit" data-p="${escaparHtml(p.producto)}" style="width:auto;margin:0">Editar</button></div>`).join('') || '<div class="aviso">Nada para mostrar.</div>';
+  cont.querySelectorAll('.desc-edit').forEach(b => { b.onclick = () => abrirEditorDescuento(b.dataset.p); });
+}
+document.getElementById('desc-vinc-buscar').addEventListener('input', renderDescVinculados);
+
+function renderDescMl() {
+  const lista = DESC_INS.filter(i => !i.es_preparacion && (i.subcategoria === 'vermut' || Number(i.ml_por_unidad) > 0))
+    .sort((a, b) => (Number(!!a.ml_por_unidad && !!a.ml_medida) - Number(!!b.ml_por_unidad && !!b.ml_medida)) || a.nombre.localeCompare(b.nombre));
+  document.getElementById('desc-ml').innerHTML = lista.map(i => `<div class="lista-item" style="display:block"><div class="nombre">${escaparHtml([i.marca, i.nombre].filter(Boolean).join(' '))}</div>
+    <div class="fila2"><div><label style="margin-top:4px">Trae (ml)</label><input type="number" min="0" step="1" class="ml-unidad" data-id="${i.id}" value="${i.ml_por_unidad != null ? Number(i.ml_por_unidad) : ''}"></div>
+    <div><label style="margin-top:4px">Medida (ml)</label><input type="number" min="0" step="1" class="ml-medida" data-id="${i.id}" value="${i.ml_medida != null ? Number(i.ml_medida) : ''}"></div></div>
+    <span class="stock-guardado" data-id="${i.id}"></span></div>`).join('') || '<div class="aviso">No hay vermuts cargados.</div>';
+  document.querySelectorAll('#desc-ml .ml-unidad, #desc-ml .ml-medida').forEach(inp => {
+    inp.onchange = async () => {
+      const id = inp.dataset.id;
+      const a = document.querySelector(`#desc-ml .ml-unidad[data-id="${id}"]`).value, b = document.querySelector(`#desc-ml .ml-medida[data-id="${id}"]`).value;
+      const marca = document.querySelector(`#desc-ml .stock-guardado[data-id="${id}"]`);
+      const { error } = await sb.rpc('pos_insumo_ml_guardar', { p_insumo: id, p_ml_unidad: a === '' ? null : Number(a), p_ml_medida: b === '' ? null : Number(b) });
+      if (error) { marca.textContent = '⚠️ ' + error.message; return; }
+      const ins = DESC_INS.find(x => x.id === id); if (ins) { ins.ml_por_unidad = a === '' ? null : Number(a); ins.ml_medida = b === '' ? null : Number(b); }
+      marca.textContent = '✓ Guardado y recalculado';
+      setTimeout(() => { marca.textContent = ''; }, 2000);
+    };
+  });
+}
+
+function filaDescuentoHtml(v) {
+  const lab = v && v.insumo_id ? (DESC_ID2LABEL[v.insumo_id] || v.insumo || '') : '';
+  const modo = (v && v.modo) || 'unidad';
+  return `<div class="desc-fila" style="border:1px solid #d9d3c7;border-radius:8px;padding:8px;margin-top:8px">
+    <input type="text" class="df-insumo" list="desc-ins-lista" placeholder="Escribí para buscar el producto del stock" value="${escaparHtml(lab)}">
+    <div class="fila2"><div><label>Cómo descuenta</label><select class="df-modo">${Object.entries(DESC_MODOS).map(([k, t]) => `<option value="${k}"${k === modo ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div><label>Cantidad</label><input type="number" step="0.01" min="0" class="df-valor" value="${v && v.valor != null ? Number(v.valor) : 1}"></div></div>
+    <div class="aviso" style="margin-top:4px">Unidades: cuántas botellas/latas. Medida: cuántas medidas del vaso. ml fijos: cantidad exacta (ej. 740 de la jarra).</div>
+    <label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="df-soda" style="width:auto"${v && v.lleva_soda ? ' checked' : ''}> Lleva soda (1 sifón cada 3 medidas del mismo ticket)</label>
+    <button type="button" class="secundario df-quitar" style="margin-top:6px">Quitar este producto</button></div>`;
+}
+function agregarFilaDescuento(v) {
+  const cont = document.getElementById('desc-form-filas');
+  cont.insertAdjacentHTML('beforeend', filaDescuentoHtml(v));
+  const f = cont.lastElementChild;
+  f.querySelector('.df-quitar').onclick = () => f.remove();
+}
+function abrirEditorDescuento(producto) {
+  const p = DESC_PROD.find(x => x.producto === producto) || { producto, vinculos: [] };
+  DESC_EDIT = producto;
+  document.getElementById('desc-form-titulo').textContent = producto;
+  document.getElementById('desc-form-filas').innerHTML = '';
+  const vs = (p.vinculos && p.vinculos.length) ? p.vinculos : [null];
+  vs.forEach(v => agregarFilaDescuento(v));
+  document.getElementById('desc-form-res').innerHTML = '';
+  const f = document.getElementById('desc-form');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+document.getElementById('btn-desc-fila').onclick = () => agregarFilaDescuento(null);
+document.getElementById('btn-desc-cancelar').onclick = () => document.getElementById('desc-form').classList.add('oculto');
+async function guardarVinculoDescuento(omitir) {
+  const res = document.getElementById('desc-form-res');
+  const vincs = [];
+  if (!omitir) {
+    for (const f of document.querySelectorAll('#desc-form-filas .desc-fila')) {
+      const lab = f.querySelector('.df-insumo').value.trim();
+      if (!lab) continue;
+      const id = DESC_LABEL2ID[lab];
+      if (!id) { res.innerHTML = `<div class="estado-box estado-error">No encuentro "${escaparHtml(lab)}" en el stock. Elegí uno de la lista que aparece al escribir.</div>`; return; }
+      const valor = Number(f.querySelector('.df-valor').value);
+      if (!(valor > 0)) { res.innerHTML = '<div class="estado-box estado-error">La cantidad tiene que ser mayor a 0.</div>'; return; }
+      vincs.push({ insumo_id: id, modo: f.querySelector('.df-modo').value, valor, lleva_soda: f.querySelector('.df-soda').checked });
+    }
+    if (!vincs.length) { res.innerHTML = '<div class="estado-box estado-error">Elegí al menos un producto del stock (o tocá "no descuenta stock").</div>'; return; }
+  }
+  const { error } = await sb.rpc('pos_vinculo_guardar', { p_producto: DESC_EDIT, p_vinculos: vincs, p_omitir: omitir || null, p_nota: null });
+  if (error) { res.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  document.getElementById('desc-form').classList.add('oculto');
+  await cargarDescuento();
+}
+document.getElementById('btn-desc-guardar').onclick = () => guardarVinculoDescuento(null);
+document.getElementById('btn-desc-nodescuenta').onclick = () => guardarVinculoDescuento('sin_stock');
+
+document.getElementById('btn-desc-auto').onclick = async () => {
+  const res = document.getElementById('desc-res');
+  res.textContent = 'Buscando...';
+  const { data, error } = await sb.rpc('pos_autovincular');
+  if (error) { res.textContent = '⚠️ ' + error.message; return; }
+  res.textContent = `Listo: ${data.vinculados} vinculados, ${data.no_descuentan} que no descuentan, ${data.sin_encontrar} que no pude reconocer.`;
+  await cargarDescuento();
+};
+document.getElementById('btn-desc-recalcular').onclick = async () => {
+  const res = document.getElementById('desc-res');
+  res.textContent = 'Recalculando...';
+  const { data, error } = await sb.rpc('pos_recalcular_todo');
+  if (error) { res.textContent = '⚠️ ' + error.message; return; }
+  res.textContent = `Listo: ${data.consumos} consumos calculados, ${data.descontados} descontados del stock.`;
+  await cargarDescuento();
+};
+document.getElementById('btn-desc-consumo').onclick = async () => {
+  const cont = document.getElementById('desc-consumo');
+  const d = document.getElementById('desc-c-desde').value, h = document.getElementById('desc-c-hasta').value;
+  if (!d || !h) { cont.innerHTML = '<div class="aviso">Elegí las fechas.</div>'; return; }
+  cont.innerHTML = 'Calculando...';
+  const { data, error } = await sb.rpc('pos_consumo_resumen', { p_desde: d, p_hasta: h });
+  if (error) { cont.innerHTML = `<div class="estado-box estado-error">${escaparHtml(error.message)}</div>`; return; }
+  const total = data.reduce((s, x) => s + Number(x.valor || 0), 0);
+  cont.innerHTML = data.length
+    ? `<div class="sub" style="margin-top:8px">Costo aproximado de lo vendido (sin IVA): <b>${fmtPesos(total)}</b></div>` + data.map(x => `<div class="lista-item"><div><div class="nombre">${escaparHtml(x.nombre)}</div><div class="sub">${ETIQUETA_SUBCATEGORIA[x.subcategoria] || x.subcategoria}</div></div><div style="text-align:right"><b>${fmtCant(x.cantidad)} ${x.unidad === 'litro' ? 'L' : (x.unidad === 'kg' ? 'kg' : 'u')}</b><div class="sub">${fmtPesos(x.valor)}</div></div></div>`).join('')
+    : '<div class="aviso">No hay consumo calculado en esas fechas.</div>';
+};
+async function abrirDescuento() {
+  mostrarPantalla('descuento');
+  document.getElementById('desc-form').classList.add('oculto');
+  document.getElementById('desc-res').textContent = '';
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+  if (!document.getElementById('desc-c-hasta').value) {
+    document.getElementById('desc-c-hasta').value = hoy;
+    document.getElementById('desc-c-desde').value = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+  }
+  await cargarDescuento();
+}
+document.getElementById('btn-ventas-descuento').onclick = abrirDescuento;
+document.getElementById('btn-volver-descuento').onclick = () => mostrarPantalla('ventas');
 
 // ---------- Asistente IA (solo lectura) ----------
 let ASISTENTE_MSGS = [];
