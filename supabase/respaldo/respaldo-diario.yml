@@ -48,7 +48,7 @@ jobs:
 
           # datos de la app + los usuarios con los que se entra (auth.users y auth.identities), todo del mismo instante
           if ! "$PGBIN/pg_dump" "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges \
-                 --schema=public --table=auth.users --table=auth.identities -f datos/datos.sql; then
+                 --table='public.*' --table=auth.users --table=auth.identities -f datos/datos.sql; then
             echo "::warning::No se pudieron incluir los usuarios de login (auth). Se guardan solo los datos de la app."
             "$PGBIN/pg_dump" "$SUPABASE_DB_URL" --data-only --no-owner --no-privileges --schema=public -f datos/datos.sql
           fi
