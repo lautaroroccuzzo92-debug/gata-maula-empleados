@@ -566,7 +566,7 @@
           </div>
           <div class="fila2">
             <div><label>Mes</label><input type="month" id="hist-mes"></div>
-            <div><label>Tipo</label><select id="hist-tipo"><option value="">Todos</option><option value="deuda">A pagar (deuda)</option><option value="pagado">Pagados (efectivo / banco)</option></select></div>
+            <div><label>Tipo</label><select id="hist-tipo"><option value="">Todos</option><option value="deuda">A pagar (todavía sin pagar)</option><option value="pagado">Pagados (efectivo, banco o deuda ya paga)</option></select></div>
           </div>
           <button class="big" id="btn-hist-buscar" type="button">Buscar</button>
           <button class="secundario" id="btn-hist-todo" type="button">Ver todo el historial</button>
@@ -4619,20 +4619,29 @@ function histAgrupar(filas) {
   });
   return Array.from(mapa.values());
 }
+// Una factura a crédito guarda siempre la forma "A pagar"; lo que dice si ya se pagó es su estado de pago.
+function histEstadoGrupo(g) {
+  const deuda = g.filas.filter(f => f.forma === 'deuda_proveedores');
+  if (!deuda.length) return { pendiente: false, pagadaDeuda: false };
+  const pendiente = deuda.some(f => f.estado_pago === 'pendiente');
+  return { pendiente, pagadaDeuda: !pendiente };
+}
 function histPillGrupo(g) {
-  const formas = g.filas.map(f => f.forma);
-  if (formas.includes('deuda_proveedores')) return '<span class="pill pill-pendiente">A pagar</span>';
-  const f = formas[0];
+  const e = histEstadoGrupo(g);
+  if (e.pendiente) return '<span class="pill pill-pendiente">A pagar</span>';
+  if (e.pagadaDeuda) return '<span class="pill pill-pagado">Pagada</span>';
+  const f = g.filas[0].forma;
   return `<span class="pill pill-pagado">${escaparHtml(ETIQUETA_FORMA[f] || g.filas[0].estado_pago || '')}</span>`;
 }
 function histItemHtml(g, i) {
   const comp = [g.factura ? 'Factura N° ' + g.factura : '', g.remito ? 'Remito N° ' + g.remito : ''].filter(Boolean).join(' · ');
   const conceptos = Array.from(new Set(g.filas.map(f => f.concepto))).join(' + ');
+  const pagadaEl = histEstadoGrupo(g).pagadaDeuda ? g.filas.map(f => f.fecha_pago).filter(Boolean).sort().pop() : null;
   return `<div class="hist-wrap" data-i="${i}">
     <div class="lista-item">
       <div style="min-width:0">
         <div class="nombre">${escaparHtml(conceptos)}</div>
-        <div class="sub">${histFecha(g.fecha)}${g.proveedor ? ' · ' + escaparHtml(g.proveedor) : ''}${comp ? ' · ' + escaparHtml(comp) : ''}</div>
+        <div class="sub">${histFecha(g.fecha)}${g.proveedor ? ' · ' + escaparHtml(g.proveedor) : ''}${comp ? ' · ' + escaparHtml(comp) : ''}${pagadaEl ? ' · pagada el ' + histFecha(pagadaEl) : ''}</div>
         <button type="button" class="secundario btn-hist-detalle" style="width:auto;padding:6px 12px;margin:6px 0 0">Ver detalle</button>
       </div>
       <div style="text-align:right;flex:none"><div class="nombre">${formatoPesos(g.total)}</div>${histPillGrupo(g)}</div>
@@ -4716,8 +4725,8 @@ async function cargarListaIngresosEgresos() {
       let q = sb.from('ingresos_egresos').select('*,proveedores(nombre)').order('fecha', { ascending: false }).order('created_at', { ascending: false }).order('id');
       if (desde) q = q.gte('fecha', desde);
       if (hasta) q = q.lte('fecha', hasta);
-      if (tipo === 'deuda') q = q.eq('forma', 'deuda_proveedores');
-      if (tipo === 'pagado') q = q.in('forma', ['egreso_efectivo', 'egreso_banco']);
+      if (tipo === 'deuda') q = q.eq('forma', 'deuda_proveedores').eq('estado_pago', 'pendiente');
+      if (tipo === 'pagado') q = q.or('forma.in.(egreso_efectivo,egreso_banco),and(forma.eq.deuda_proveedores,estado_pago.eq.pagado)');
       if (filtroTexto) q = q.or(filtroTexto);
       return q;
     });
@@ -5391,6 +5400,7 @@ function renderCalendario() {
       if (!c || !confirm(`¿Volver a dejar pendiente el pago de ${c.proveedor_texto} (${formatoPesos(c.total)})?`)) return;
       const { error } = await sb.from('calendario_pagos').update({ pagado: false, fecha_pago: null, medio_pago: null }).eq('id', c.id);
       if (error) { alert('Error: ' + error.message); return; }
+      if (c.egreso_id) await sb.from('ingresos_egresos').update({ estado_pago: 'pendiente', fecha_pago: null }).eq('id', c.egreso_id);
       await cargarCalendario();
     };
   });
@@ -5466,8 +5476,12 @@ document.getElementById('btn-cal-confirmar').onclick = async () => {
   const res = document.getElementById('cal-resultado');
   res.innerHTML = '';
   if (modo === 'pagar' && document.getElementById('cal-pago-forma').value === 'ya_pagado') {
-    const { error } = await sb.from('calendario_pagos').update({ pagado: true, fecha_pago: document.getElementById('cal-pago-fecha').value || null, medio_pago: 'ya anotado' }).eq('id', calendarioEditandoId);
+    const fechaYa = document.getElementById('cal-pago-fecha').value || null;
+    const { error } = await sb.from('calendario_pagos').update({ pagado: true, fecha_pago: fechaYa, medio_pago: 'ya anotado' }).eq('id', calendarioEditandoId);
     if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+    // la factura de origen también pasa a pagada (si no, en el historial seguiría figurando "A pagar")
+    const cYa = CALENDARIO.find(x => x.id === calendarioEditandoId);
+    if (cYa && cYa.egreso_id) await sb.from('ingresos_egresos').update({ estado_pago: 'pagado', fecha_pago: fechaYa }).eq('id', cYa.egreso_id);
   } else if (modo === 'pagar') {
     const { error } = await sb.rpc('pagar_calendario', {
       p_id: calendarioEditandoId,
@@ -5883,13 +5897,13 @@ async function cargarSueldos() {
   const filas = data.filas || [], conf = data.estado === 'confirmado';
   const suma = (k) => filas.reduce((s, f) => s + Number(f[k] || 0), 0);
   resumen.innerHTML = `<div class="desglose-fila"><span>${etiquetaMes(ym)} ${conf ? '· 🔒 confirmado' : '· abierto'}</span><span></span></div>
-    <div class="desglose-fila"><span>Total a pagar</span><span><b>${fmtPesos(suma('neto'))}</b></span></div>
-    <div class="desglose-fila"><span>Por transferencia</span><span>${fmtPesos(suma('transferencia'))}</span></div>
-    <div class="desglose-fila"><span>En efectivo</span><span>${fmtPesos(suma('efectivo'))}</span></div>`;
+    <div class="desglose-fila"><span>Total a pagar</span><span><b id="sj-sum-neto">${fmtPesos(suma('neto'))}</b></span></div>
+    <div class="desglose-fila"><span>Por transferencia</span><span id="sj-sum-tr">${fmtPesos(suma('transferencia'))}</span></div>
+    <div class="desglose-fila"><span>En efectivo (lo que resta de cada sueldo)</span><span id="sj-sum-efe">${fmtPesos(suma('efectivo'))}</span></div>`;
   lista.innerHTML = filas.map(f => {
     const dis = conf ? 'disabled' : '';
-    return `<div class="card" data-emp="${f.empleado_id}" style="margin-top:10px">
-      <div class="desglose-fila"><span><b>${escaparHtml(f.nombre)}</b></span><span><b>${fmtPesos(f.neto)}</b></span></div>
+    return `<div class="card" data-emp="${f.empleado_id}" data-bruto="${Number(f.bruto) || 0}" data-neto="${Number(f.neto) || 0}" data-tr="${Number(f.transferencia) || 0}" data-efe="${Number(f.efectivo) || 0}" style="margin-top:10px">
+      <div class="desglose-fila"><span><b>${escaparHtml(f.nombre)}</b></span><span><b class="sj-neto">${fmtPesos(f.neto)}</b></span></div>
       <div class="sub">Horas: ${fmtHs(f.h_normales)}${Number(f.h_feriado) ? ` + ${fmtHs(f.h_feriado)} en feriado (doble)` : ''}${Number(f.h_licencia) ? ` + ${fmtHs(f.h_licencia)} de licencia` : ''}${f.abiertos ? ` · <span class="bajo-minimo">⚠️ ${f.abiertos} turno(s) sin salida</span>` : ''}</div>
       <div class="sub">Sueldo por horas: ${fmtPesos(f.bruto)}${f.valor_hora == null ? ' · <span class="bajo-minimo">falta el valor hora</span>' : ''}</div>
       <div style="display:flex;gap:8px;align-items:end;margin-top:6px">
@@ -5903,7 +5917,7 @@ async function cargarSueldos() {
         <div><label>Descuentos / adelantos</label><input type="number" step="0.01" class="sj-de" value="${Number(f.descuentos) || ''}" ${dis}></div>
         <div><label>Por transferencia</label><input type="number" step="0.01" class="sj-tr" value="${Number(f.transferencia) || ''}" ${dis}></div>
       </div>
-      <div class="sub">En efectivo: ${fmtPesos(f.efectivo)}</div>
+      <div class="sub">En efectivo (sueldo menos transferencia): <b class="sj-efe">${fmtPesos(f.efectivo)}</b> <span class="sj-sin-guardar bajo-minimo"></span></div>
       <label>Nota</label><input type="text" class="sj-nota" value="${f.nota ? escaparHtml(f.nota).replace(/"/g, '&quot;') : ''}" ${dis}>
       <div class="sj-res"></div>
       ${conf ? '' : '<button type="button" class="secundario btn-sj-guardar" style="margin-top:8px">Guardar ajustes</button>'}
@@ -5916,6 +5930,23 @@ async function cargarSueldos() {
     const val = (c) => Number(card.querySelector(c).value || 0);
     const res = card.querySelector('.sj-res');
     const g = card.querySelector('.btn-sj-guardar');
+    // El efectivo se recalcula mientras se escribe: sueldo (con aguinaldo, vacaciones y bono, menos descuentos) menos lo transferido.
+    const refrescarEfectivo = () => {
+      const neto = (Number(card.dataset.bruto) || 0) + val('.sj-ag') + val('.sj-va') + val('.sj-bo') - val('.sj-de');
+      const tr = val('.sj-tr');
+      const efe = neto - tr;
+      card.dataset.neto = neto; card.dataset.tr = tr; card.dataset.efe = efe;
+      card.querySelector('.sj-neto').textContent = fmtPesos(neto);
+      const el = card.querySelector('.sj-efe');
+      el.textContent = fmtPesos(efe);
+      el.style.color = efe < 0 ? 'var(--rojo, #c0392b)' : '';
+      card.querySelector('.sj-sin-guardar').textContent = efe < 0 ? '· la transferencia es mayor al sueldo' : '· sin guardar';
+      const sumar = (k) => Array.from(lista.querySelectorAll('.card')).reduce((s, c) => s + (Number(c.dataset[k]) || 0), 0);
+      document.getElementById('sj-sum-neto').textContent = fmtPesos(sumar('neto'));
+      document.getElementById('sj-sum-tr').textContent = fmtPesos(sumar('tr'));
+      document.getElementById('sj-sum-efe').textContent = fmtPesos(sumar('efe'));
+    };
+    ['.sj-ag', '.sj-va', '.sj-bo', '.sj-de', '.sj-tr'].forEach(c => card.querySelector(c).addEventListener('input', refrescarEfectivo));
     if (g) g.onclick = async () => {
       const { error: e } = await sb.rpc('sueldos_ajuste_guardar', { p_mes: ym + '-01', p_empleado: emp, p_aguinaldo: val('.sj-ag'), p_vacaciones: val('.sj-va'), p_bono: val('.sj-bo'), p_descuentos: val('.sj-de'), p_transferencia: val('.sj-tr'), p_nota: card.querySelector('.sj-nota').value });
       if (e) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(e.message)}</div>`; return; }
@@ -5929,6 +5960,7 @@ async function cargarSueldos() {
       const mio = (ag || []).find(x => x.empleado_id === emp);
       if (!mio) { res.innerHTML = '<div class="aviso">No pude calcular el aguinaldo de esta persona.</div>'; return; }
       card.querySelector('.sj-ag').value = mio.aguinaldo;
+      refrescarEfectivo();
       res.innerHTML = `<div class="aviso">Aguinaldo sugerido: 50% de ${fmtPesos(mio.mejor_mes)} (su mejor mes del semestre) × ${mio.dias}/${mio.dias_semestre} días = ${fmtPesos(mio.aguinaldo)}. Revisalo y tocá "Guardar ajustes".</div>`;
     };
     const vsug = card.querySelector('.btn-sj-va-sug');
@@ -5945,6 +5977,7 @@ async function cargarSueldos() {
       if (!(dias >= 0)) return;
       const monto = Math.round(Number(mio.valor_hora) * Number(mio.prom_horas_dia) * dias);
       card.querySelector('.sj-va').value = monto;
+      refrescarEfectivo();
       res.innerHTML = `<div class="aviso">Vacaciones sugeridas: ${fmtPesos(mio.valor_hora)} por hora × ${Number(mio.prom_horas_dia).toLocaleString('es-AR')} horas promedio por día × ${dias} días = ${fmtPesos(monto)}. Revisalo y tocá "Guardar ajustes".</div>`;
     };
     const gv = card.querySelector('.btn-sv-valor');

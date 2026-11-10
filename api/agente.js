@@ -284,7 +284,7 @@ const HERRAMIENTAS = [
     def: {
       name: 'buscar_comprobantes',
       description: 'Busca facturas, remitos y movimientos de compras/gastos (ingresos y egresos cargados) de todo el historial. Sirve para "cuándo ingresó la factura 0001-1234", "qué facturas de Lorenzo hubo en agosto" o "cuándo compramos jamón crudo". Podés filtrar por fechas (opcional), por texto (proveedor, número de factura o remito, concepto o producto) y por tipo. Devuelve cada comprobante con fecha, proveedor, número, monto, estado de pago y, si se guardó, los productos que ingresaron (solo las facturas cargadas con foto desde que existe el detalle los tienen; las anteriores no).',
-      input_schema: { type: 'object', properties: { ...FECHAS, buscar: { type: 'string', description: 'Proveedor, N° de factura o remito, concepto o producto' }, tipo: { type: 'string', enum: ['todos', 'a_pagar', 'pagados'], description: 'a_pagar = deuda con el proveedor; pagados = efectivo o banco' } } }
+      input_schema: { type: 'object', properties: { ...FECHAS, buscar: { type: 'string', description: 'Proveedor, N° de factura o remito, concepto o producto' }, tipo: { type: 'string', enum: ['todos', 'a_pagar', 'pagados'], description: 'a_pagar = deuda con el proveedor todavía sin pagar; pagados = efectivo, banco o deuda ya paga' } } }
     },
     async run(ctx, a) {
       const texto = String(a.buscar || '').replace(/[,()%*"\\]/g, ' ').trim();
@@ -302,11 +302,11 @@ const HERRAMIENTAS = [
         filtro = partes.join(',');
       }
       const filas = await traer(() => {
-        let q = ctx.sb.from('ingresos_egresos').select('id,fecha,concepto,monto,forma,factura_numero,remito_numero,comprobante_id,proveedor_id,fecha_pago,medio_pago,origen,observaciones,proveedores(nombre)').order('fecha', { ascending: false }).order('id');
+        let q = ctx.sb.from('ingresos_egresos').select('id,fecha,concepto,monto,forma,estado_pago,factura_numero,remito_numero,comprobante_id,proveedor_id,fecha_pago,medio_pago,origen,observaciones,proveedores(nombre)').order('fecha', { ascending: false }).order('id');
         if (a.desde) q = q.gte('fecha', a.desde);
         if (a.hasta) q = q.lte('fecha', a.hasta);
-        if (a.tipo === 'a_pagar') q = q.eq('forma', 'deuda_proveedores');
-        if (a.tipo === 'pagados') q = q.in('forma', ['egreso_efectivo', 'egreso_banco']);
+        if (a.tipo === 'a_pagar') q = q.eq('forma', 'deuda_proveedores').eq('estado_pago', 'pendiente');
+        if (a.tipo === 'pagados') q = q.or('forma.in.(egreso_efectivo,egreso_banco),and(forma.eq.deuda_proveedores,estado_pago.eq.pagado)');
         if (filtro) q = q.or(filtro);
         return q;
       });
@@ -318,7 +318,7 @@ const HERRAMIENTAS = [
         if (!g) { g = { comprobante_id: m.comprobante_id || null, fecha: m.fecha, proveedor: m.proveedores?.nombre || null, factura: m.factura_numero || null, remito: m.remito_numero || null, conceptos: [], total: 0, a_pagar: false, pagado_el: m.fecha_pago, medio_pago: m.medio_pago, cargado_a_mano: m.origen === 'manual' }; grupos.set(k, g); }
         if (!g.conceptos.includes(m.concepto)) g.conceptos.push(m.concepto);
         g.total += Number(m.monto) || 0;
-        if (m.forma === 'deuda_proveedores') g.a_pagar = true;
+        if (m.forma === 'deuda_proveedores' && m.estado_pago === 'pendiente') g.a_pagar = true;
         if (!g.factura && m.factura_numero) g.factura = m.factura_numero;
         if (!g.remito && m.remito_numero) g.remito = m.remito_numero;
       });
