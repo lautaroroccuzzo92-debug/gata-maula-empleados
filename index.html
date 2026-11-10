@@ -823,6 +823,7 @@
     </div>
 
     <div id="prod-vista-activos">
+      <div class="card oculto" id="prod-vencidos-panel" style="border-color:var(--rojo, #c0392b)"></div>
       <button class="agregar-producto" id="btn-prod-nuevo" type="button">+ Nuevo lote</button>
       <div class="card oculto" id="prod-form-lote">
         <h3 id="prod-lote-titulo" style="margin:0 0 6px">Nuevo lote</h3>
@@ -851,6 +852,14 @@
         <div class="aviso" id="prod-lote-error" style="color:#b3262d"></div>
         <button class="big" id="btn-prod-guardar-lote" type="button">Guardar lote</button>
         <button class="secundario" id="btn-prod-cancelar-lote" type="button">Cancelar</button>
+      </div>
+      <div class="card oculto" id="prod-form-previos">
+        <h3 style="margin:0 0 6px">Antes de guardar: ya hay <span id="prod-previos-nombre"></span> hecho</h3>
+        <div class="aviso" style="margin-top:0">Contanos qué pasó con lo que ya estaba. Así la merma y lo que se usó quedan bien anotados.</div>
+        <div id="prod-previos-lista"></div>
+        <div class="aviso" id="prod-previos-error" style="color:#b3262d"></div>
+        <button class="big" id="btn-prod-previos-seguir" type="button">Confirmar y guardar el lote nuevo</button>
+        <button class="secundario" id="btn-prod-previos-volver" type="button">Volver</button>
       </div>
       <div class="card oculto" id="prod-form-cierre">
         <h3 id="prod-cierre-titulo" style="margin:0 0 6px">Terminar lote</h3>
@@ -2457,6 +2466,7 @@ async function cargarProduccion() {
   if (it.error || lo.error) { document.getElementById('prod-resumen').textContent = (it.error || lo.error).message; return; }
   PROD_ITEMS = it.data || [];
   PROD_LOTES = lo.data || [];
+  renderProdVencidos();
   renderProdActivos();
   actualizarBadgeProduccion();
 }
@@ -2535,6 +2545,8 @@ function prodLlenarSelectItem(filtro) {
 }
 function abrirFormLote(lote) {
   PROD_EDIT_ID = lote ? lote.id : null;
+  PROD_PREVIOS_OK = false;
+  document.getElementById('prod-form-previos').classList.add('oculto');
   document.getElementById('prod-form-cierre').classList.add('oculto');
   const sel = document.getElementById('prod-lote-item');
   const activos = PROD_ITEMS.filter(i => i.activo || (lote && i.id === lote.item_id));
@@ -2570,7 +2582,100 @@ document.getElementById('prod-buscar-cerrados').addEventListener('input', render
 document.getElementById('prod-lote-fecha').addEventListener('input', prodActualizarVence);
 document.getElementById('prod-lote-unidad-sel').addEventListener('change', prodEtiquetaUnidadSel);
 document.getElementById('prod-lote-vida-dias').addEventListener('input', prodActualizarVence);
-document.getElementById('btn-prod-cancelar-lote').onclick = () => document.getElementById('prod-form-lote').classList.add('oculto');
+document.getElementById('btn-prod-cancelar-lote').onclick = () => { document.getElementById('prod-form-previos').classList.add('oculto'); document.getElementById('prod-form-lote').classList.add('oculto'); };
+
+// ----- al cargar un lote nuevo de un producto que ya tiene lotes activos: ¿qué pasó con los anteriores?
+let PROD_PREVIOS_OK = false;
+function prodMostrarPrevios(previos, nombre) {
+  document.getElementById('prod-previos-nombre').textContent = nombre;
+  document.getElementById('prod-previos-error').textContent = '';
+  document.getElementById('prod-previos-lista').innerHTML = previos.map(l => {
+    const e = prodEstadoLote(l);
+    const u = prodTxtUni(prodUnidadLote(l));
+    const vencido = prodDiasHasta(l.vence_el) < 0;
+    return `<div class="card" style="padding:10px;margin:8px 0" data-id="${l.id}">
+      <div class="nombre">Elaborado el ${prodFecha(l.elaborado_el)} · ${prodCant(l, l.cantidad_producida)}</div>
+      <div class="sub ${e.clase}" style="font-weight:700">${e.icono} ${e.texto}</div>
+      <select class="prev-op" style="margin-top:6px">
+        <option value="">Elegí qué pasó...</option>
+        <option value="termino">✅ Se terminó (se usó todo)</option>
+        <option value="merma"${vencido ? ' selected' : ''}>🗑️ Se terminó y se tiró lo que quedó</option>
+        <option value="sigue">⏳ Todavía queda, sigue activo</option>
+      </select>
+      <div class="prev-merma${vencido ? '' : ' oculto'}" style="margin-top:6px">
+        <label style="margin-top:0">¿Cuánto se tiró? (${u})</label><input type="number" step="any" min="0" class="prev-merma-cant" value="${vencido ? prodAIngreso(l, l.cantidad_producida) : ''}">
+        <label>Motivo</label><input type="text" class="prev-merma-motivo" list="prod-motivos" value="${vencido ? 'Venció' : ''}" placeholder="Ej: venció, se arruinó, sobrante">
+      </div></div>`;
+  }).join('');
+  document.querySelectorAll('#prod-previos-lista .prev-op').forEach(s => {
+    s.onchange = () => s.closest('[data-id]').querySelector('.prev-merma').classList.toggle('oculto', s.value !== 'merma');
+  });
+  const f = document.getElementById('prod-form-previos');
+  f.classList.remove('oculto');
+  f.scrollIntoView({ behavior: 'smooth' });
+}
+document.getElementById('btn-prod-previos-volver').onclick = () => document.getElementById('prod-form-previos').classList.add('oculto');
+document.getElementById('btn-prod-previos-seguir').onclick = async () => {
+  const err = document.getElementById('prod-previos-error');
+  err.textContent = '';
+  const acciones = [];
+  for (const fila of document.querySelectorAll('#prod-previos-lista [data-id]')) {
+    const l = PROD_LOTES.find(x => x.id === fila.dataset.id);
+    const op = fila.querySelector('.prev-op').value;
+    if (!op) { err.textContent = 'Elegí qué pasó con cada lote.'; return; }
+    let merma = 0, motivo = '';
+    if (op === 'merma') {
+      merma = Number(fila.querySelector('.prev-merma-cant').value) || 0;
+      motivo = fila.querySelector('.prev-merma-motivo').value.trim();
+      if (!(merma > 0) || merma > prodAIngreso(l, l.cantidad_producida) + 0.0005) { err.textContent = 'Poné cuánto se tiró (más que 0 y no más de lo elaborado).'; return; }
+      if (!motivo) { err.textContent = 'Poné el motivo de la merma.'; return; }
+    }
+    acciones.push({ l, op, merma, motivo });
+  }
+  const btn = document.getElementById('btn-prod-previos-seguir');
+  btn.disabled = true;
+  for (const a of acciones) {
+    if (a.op === 'sigue') continue;
+    const { error } = await sb.rpc('produccion_cerrar_lote', { p_id: a.l.id, p_merma: a.merma, p_motivo: a.motivo });
+    if (error) { btn.disabled = false; err.textContent = `No se pudo cerrar uno de los lotes: ${error.message}`; return; }
+  }
+  btn.disabled = false;
+  const cerrados = acciones.filter(a => a.op !== 'sigue').map(a => a.l.id);
+  PROD_LOTES = PROD_LOTES.filter(x => !cerrados.includes(x.id));
+  PROD_PREVIOS_OK = true;
+  document.getElementById('prod-form-previos').classList.add('oculto');
+  document.getElementById('btn-prod-guardar-lote').click();
+};
+
+// ----- al abrir Producción: los lotes vencidos que nadie cerró (¿qué pasó con cada uno?)
+function renderProdVencidos() {
+  const cont = document.getElementById('prod-vencidos-panel');
+  const venc = PROD_LOTES.filter(l => prodDiasHasta(l.vence_el) < 0).sort((a, b) => String(a.vence_el).localeCompare(String(b.vence_el)));
+  if (!venc.length) { cont.classList.add('oculto'); cont.innerHTML = ''; return; }
+  cont.classList.remove('oculto');
+  cont.innerHTML = `<h3 style="margin:0 0 6px">⚠️ ${venc.length} ${venc.length === 1 ? 'lote vencido sin cerrar' : 'lotes vencidos sin cerrar'}</h3>
+    <div class="aviso" style="margin-top:0">Si ya se usó o se tiró, decinos qué pasó con cada uno para que desaparezca de la lista y la merma quede bien anotada. Si todavía lo están usando, dejalo.</div>` +
+    venc.map(l => `<div class="card" style="padding:10px;margin:8px 0" data-id="${l.id}">
+      <div class="nombre">${escaparHtml(l.produccion_items?.nombre || '')} · ${prodCant(l, l.cantidad_producida)}</div>
+      <div class="sub">Elaborado el ${prodFecha(l.elaborado_el)} · venció el ${prodFecha(l.vence_el)} (hace ${-prodDiasHasta(l.vence_el)} ${-prodDiasHasta(l.vence_el) === 1 ? 'día' : 'días'})</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="secundario pv-uso" style="width:auto;margin:0;padding:8px 12px">✅ Se usó todo</button>
+        <button type="button" class="secundario pv-tiro" style="width:auto;margin:0;padding:8px 12px">🗑️ Se tiró todo</button>
+        <button type="button" class="secundario pv-otro" style="width:auto;margin:0;padding:8px 12px">✏️ Otra cantidad</button>
+      </div></div>`).join('');
+  const cerrar = async (fila, merma, motivo, aviso) => {
+    const l = PROD_LOTES.find(x => x.id === fila.dataset.id);
+    if (!l || !confirm(aviso(l))) return;
+    const { error } = await sb.rpc('produccion_cerrar_lote', { p_id: l.id, p_merma: merma(l), p_motivo: motivo });
+    if (error) { alert(error.message); return; }
+    await cargarProduccion();
+  };
+  cont.querySelectorAll('[data-id]').forEach(fila => {
+    fila.querySelector('.pv-uso').onclick = () => cerrar(fila, () => 0, '', l => `¿Confirmás que se usó todo el lote de ${l.produccion_items?.nombre || ''}? Se cierra sin merma.`);
+    fila.querySelector('.pv-tiro').onclick = () => cerrar(fila, l => prodAIngreso(l, l.cantidad_producida), 'Venció', l => `¿Confirmás que se tiró todo el lote de ${l.produccion_items?.nombre || ''} (${prodCant(l, l.cantidad_producida)})? Se cierra y queda como merma.`);
+    fila.querySelector('.pv-otro').onclick = () => abrirCierreLote(PROD_LOTES.find(x => x.id === fila.dataset.id));
+  });
+}
 document.getElementById('btn-prod-guardar-lote').onclick = async () => {
   const err = document.getElementById('prod-lote-error');
   err.textContent = '';
@@ -2586,6 +2691,12 @@ document.getElementById('btn-prod-guardar-lote').onclick = async () => {
   if (!(cant > 0)) { err.textContent = 'Poné cuánto se elaboró.'; return; }
   if (merma < 0 || merma > cant) { err.textContent = 'La merma no puede ser mayor a lo elaborado.'; return; }
   if (merma > 0 && !motivo.trim()) { err.textContent = 'Poné el motivo de la merma.'; return; }
+  // Si ese producto ya tiene lotes activos, primero se pregunta qué pasó con ellos (se terminó, se tiró, sigue)
+  if (!PROD_EDIT_ID && itemId !== '__nuevo__' && !PROD_PREVIOS_OK) {
+    const previos = PROD_LOTES.filter(l => l.item_id === itemId);
+    if (previos.length) { prodMostrarPrevios(previos, previos[0].produccion_items?.nombre || ''); return; }
+  }
+  PROD_PREVIOS_OK = false;
   const quien = document.getElementById('prod-lote-quien').value, obs = document.getElementById('prod-lote-obs').value;
   const btn = document.getElementById('btn-prod-guardar-lote');
   btn.disabled = true;
