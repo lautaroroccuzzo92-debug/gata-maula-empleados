@@ -554,9 +554,27 @@
   <!-- PANTALLA: INGRESOS / EGRESOS -->
   <div id="pantalla-ingresos" class="oculto">
     <h2 class="section-title" style="margin-top:0">Ingresos / Egresos</h2>
-    <details class="grupo-stock">
-      <summary><span>Últimos movimientos <span class="grupo-cant">(30)</span></span></summary>
-      <div class="grupo-stock-body"><div id="ingresos-lista"></div></div>
+    <details class="grupo-stock" open>
+      <summary><span>Historial de movimientos <span class="grupo-cant" id="ingresos-cant"></span></span></summary>
+      <div class="grupo-stock-body">
+        <div class="card" style="margin-top:0">
+          <label style="margin-top:0">Buscar</label>
+          <input type="text" id="hist-texto" placeholder="Proveedor, N° de factura o remito, concepto o producto" autocomplete="off">
+          <div class="fila2">
+            <div><label>Desde</label><input type="date" id="hist-desde"></div>
+            <div><label>Hasta</label><input type="date" id="hist-hasta"></div>
+          </div>
+          <div class="fila2">
+            <div><label>Mes</label><input type="month" id="hist-mes"></div>
+            <div><label>Tipo</label><select id="hist-tipo"><option value="">Todos</option><option value="deuda">A pagar (deuda)</option><option value="pagado">Pagados (efectivo / banco)</option></select></div>
+          </div>
+          <button class="big" id="btn-hist-buscar" type="button">Buscar</button>
+          <button class="secundario" id="btn-hist-todo" type="button">Ver todo el historial</button>
+        </div>
+        <div id="ingresos-resumen"></div>
+        <div id="ingresos-lista"></div>
+        <button class="secundario oculto" id="btn-hist-mas" type="button">Ver más</button>
+      </div>
     </details>
     <button class="agregar-producto" id="btn-nuevo-ingreso-egreso">+ Cargar movimiento</button>
     <button class="agregar-producto" id="btn-nueva-nc" type="button">↩️ Cargar nota de crédito de un proveedor</button>
@@ -605,7 +623,9 @@
           <option value="otros_ingresos">Otro ingreso (no habitual)</option>
         </select>
         <div id="ie-aviso-venc" class="aviso oculto"></div>
-        <label>N° Factura / Orden (opcional)</label>
+        <label>Tipo de comprobante (opcional)</label>
+        <select id="ie-comprobante-tipo"><option value="factura">Factura</option><option value="remito">Remito</option></select>
+        <label>N° de comprobante / orden (opcional)</label>
         <input type="text" id="ie-factura-numero">
         <label>Observaciones</label>
         <textarea id="ie-observaciones"></textarea>
@@ -807,6 +827,7 @@
       <div class="card oculto" id="prod-form-lote">
         <h3 id="prod-lote-titulo" style="margin:0 0 6px">Nuevo lote</h3>
         <label style="margin-top:0">Producto</label>
+        <input type="text" id="prod-lote-buscar" placeholder="Escribí para buscar el producto..." autocomplete="off" style="margin-bottom:6px">
         <select id="prod-lote-item"></select>
         <div id="prod-lote-nuevo-wrap" class="oculto"><label>Nombre del producto nuevo</label><input type="text" id="prod-lote-nuevo-nombre" placeholder="Ej: Arroz"><div class="aviso" style="margin-top:2px">Queda guardado en la lista de productos para la próxima vez.</div></div>
         <div class="fila2">
@@ -844,10 +865,14 @@
         <button class="big" id="btn-prod-confirmar-cierre" type="button">Terminar lote</button>
         <button class="secundario" id="btn-prod-cancelar-cierre" type="button">Cancelar</button>
       </div>
+      <input type="text" id="prod-buscar-activos" placeholder="Buscar entre los lotes activos..." autocomplete="off">
       <div id="prod-lista-activos"></div>
     </div>
 
-    <div id="prod-vista-cerrados" class="oculto"><div id="prod-lista-cerrados"></div></div>
+    <div id="prod-vista-cerrados" class="oculto">
+      <input type="text" id="prod-buscar-cerrados" placeholder="Buscar un producto terminado..." autocomplete="off">
+      <div id="prod-lista-cerrados"></div>
+    </div>
 
     <div id="prod-vista-reporte" class="oculto">
       <div class="card">
@@ -1047,12 +1072,20 @@
     <h2 class="section-title" style="margin-top:0">Calendario de pagos a proveedores</h2>
     <div class="card" id="calendario-resumen"></div>
     <button class="agregar-producto" id="btn-calendario-nuevo">+ Agregar pago</button>
-    <button class="secundario" id="btn-calendario-ver-pagados">Ver pagados recientes</button>
+    <button class="secundario" id="btn-calendario-ver-pagados">Ver pagados</button>
+    <div id="cal-pag-filtros" class="card oculto">
+      <div class="fila2">
+        <div><label style="margin-top:0">Mes</label><input type="month" id="cal-pag-mes"></div>
+        <div><label style="margin-top:0">Buscar</label><input type="text" id="cal-pag-texto" placeholder="Proveedor, N° o concepto" autocomplete="off"></div>
+      </div>
+      <button class="secundario" id="btn-cal-pag-todo" type="button">Ver todo el historial de pagos</button>
+    </div>
     <div id="calendario-form" class="card oculto">
       <h2 class="section-title" style="margin-top:0" id="cal-form-titulo"></h2>
       <input type="hidden" id="cal-modo">
       <div id="cal-wrap-pagar">
-        <label style="margin-top:0">¿Cómo se pagó?</label>
+        <div class="aviso" id="cal-pago-comprobante" style="margin-top:0"></div>
+        <label>¿Cómo se pagó?</label>
         <select id="cal-pago-forma">
           <option value="egreso_banco">Banco / transferencia</option>
           <option value="egreso_efectivo">Efectivo</option>
@@ -2434,6 +2467,9 @@ function renderProdActivos() {
   document.getElementById('prod-resumen').innerHTML = `<b>${PROD_LOTES.length}</b> lotes activos · <span class="${venc ? 'bajo-minimo' : ''}">🔴 ${venc} vencidos</span> · <span class="${pronto ? 'bajo-minimo' : ''}">🟡 ${pronto} por vencer</span>`;
   const cont = document.getElementById('prod-lista-activos');
   if (!PROD_LOTES.length) { cont.innerHTML = '<div class="aviso">No hay lotes activos. Tocá "+ Nuevo lote" cuando elaboren algo.</div>'; return; }
+  const qa = normalizarTexto((document.getElementById('prod-buscar-activos').value || '').trim());
+  const lotesVer = qa ? PROD_LOTES.filter(l => prodCoincide(l.produccion_items?.nombre, qa)) : PROD_LOTES;
+  if (!lotesVer.length) { cont.innerHTML = '<div class="aviso">Ningún lote activo coincide con la búsqueda.</div>'; return; }
   const cardHtml = (l) => {
     const e = prodEstadoLote(l);
     const u = prodUni(l.produccion_items?.unidad);
@@ -2450,7 +2486,7 @@ function renderProdActivos() {
       </div></div>`;
   };
   const g = { venc: [], pronto: [], ok: [] };
-  PROD_LOTES.forEach(l => { const d = prodDiasHasta(l.vence_el); (d < 0 ? g.venc : (d <= PROD_ALERTA_DIAS ? g.pronto : g.ok)).push(l); });
+  lotesVer.forEach(l => { const d = prodDiasHasta(l.vence_el); (d < 0 ? g.venc : (d <= PROD_ALERTA_DIAS ? g.pronto : g.ok)).push(l); });
   cont.innerHTML = [['🔴 Vencidos', g.venc], ['🟡 Por vencer', g.pronto], ['🟢 Activos', g.ok]].filter(x => x[1].length)
     .map(([t, arr]) => `<details class="grupo-stock"><summary><span>${t} <span class="grupo-cant">(${arr.length})</span></span></summary><div class="grupo-stock-body">${arr.map(cardHtml).join('')}</div></details>`).join('');
   cont.querySelectorAll('.prod-editar').forEach(b => { b.onclick = () => abrirFormLote(PROD_LOTES.find(l => l.id === b.dataset.id)); });
@@ -2481,12 +2517,32 @@ function prodElegirItem() {
   if (item && !PROD_EDIT_ID) document.getElementById('prod-lote-vida-dias').value = item.vida_util_dias; // sugerida: se puede cambiar
   prodActualizarVence();
 }
+// Todas las palabras que se escribieron tienen que estar en el nombre (sin importar tildes ni mayúsculas).
+function prodCoincide(nombre, q) {
+  const base = normalizarTexto(nombre || '');
+  return q.split(' ').filter(Boolean).every(p => base.indexOf(p) >= 0);
+}
+let PROD_FORM_ITEMS = { activos: [], lote: null };
+function prodLlenarSelectItem(filtro) {
+  const sel = document.getElementById('prod-lote-item');
+  const { activos, lote } = PROD_FORM_ITEMS;
+  const actual = sel.value;
+  const q = normalizarTexto((filtro || '').trim());
+  const lista = q ? activos.filter(i => prodCoincide(i.nombre, q)) : activos;
+  sel.innerHTML = `<option value="">${q && !lista.length ? 'Ningún producto coincide...' : 'Elegí el producto...'}</option>` + lista.map(i => `<option value="${i.id}">${escaparHtml(i.nombre)}</option>`).join('') + (lote ? '' : '<option value="__nuevo__">➕ Otro producto (nuevo)...</option>');
+  if (actual && Array.from(sel.options).some(o => o.value === actual)) sel.value = actual;
+  else if (q && lista.length === 1 && !lote) { sel.value = lista[0].id; prodElegirItem(); }
+}
 function abrirFormLote(lote) {
   PROD_EDIT_ID = lote ? lote.id : null;
   document.getElementById('prod-form-cierre').classList.add('oculto');
   const sel = document.getElementById('prod-lote-item');
   const activos = PROD_ITEMS.filter(i => i.activo || (lote && i.id === lote.item_id));
-  sel.innerHTML = '<option value="">Elegí el producto...</option>' + activos.map(i => `<option value="${i.id}">${escaparHtml(i.nombre)}</option>`).join('') + (lote ? '' : '<option value="__nuevo__">➕ Otro producto (nuevo)...</option>');
+  PROD_FORM_ITEMS = { activos, lote };
+  document.getElementById('prod-lote-buscar').value = '';
+  document.getElementById('prod-lote-buscar').classList.toggle('oculto', !!lote);
+  sel.innerHTML = '';
+  prodLlenarSelectItem('');
   document.getElementById('prod-lote-nuevo-wrap').classList.add('oculto');
   document.getElementById('prod-lote-nuevo-nombre').value = '';
   sel.value = lote ? lote.item_id : '';
@@ -2508,6 +2564,9 @@ function abrirFormLote(lote) {
 }
 document.getElementById('btn-prod-nuevo').onclick = () => abrirFormLote(null);
 document.getElementById('prod-lote-item').addEventListener('change', prodElegirItem);
+document.getElementById('prod-lote-buscar').addEventListener('input', (e) => prodLlenarSelectItem(e.target.value));
+document.getElementById('prod-buscar-activos').addEventListener('input', renderProdActivos);
+document.getElementById('prod-buscar-cerrados').addEventListener('input', renderProdCerrados);
 document.getElementById('prod-lote-fecha').addEventListener('input', prodActualizarVence);
 document.getElementById('prod-lote-unidad-sel').addEventListener('change', prodEtiquetaUnidadSel);
 document.getElementById('prod-lote-vida-dias').addEventListener('input', prodActualizarVence);
@@ -2593,14 +2652,24 @@ document.getElementById('btn-prod-confirmar-cierre').onclick = async () => {
 };
 
 // ----- terminados
+let PROD_CERRADOS = [];
 async function cargarProdCerrados() {
   const cont = document.getElementById('prod-lista-cerrados');
   cont.innerHTML = 'Cargando...';
-  const { data, error } = await sb.from('produccion_lotes').select('*,produccion_items(nombre,unidad)').eq('estado', 'cerrado').order('cerrado_el', { ascending: false }).limit(60);
+  const { data, error } = await sb.from('produccion_lotes').select('*,produccion_items(nombre,unidad)').eq('estado', 'cerrado').order('cerrado_el', { ascending: false }).limit(1000);
   if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
-  if (!data.length) { cont.innerHTML = '<div class="aviso">Todavía no hay lotes terminados.</div>'; return; }
+  PROD_CERRADOS = data || [];
+  renderProdCerrados();
+}
+function renderProdCerrados() {
+  const cont = document.getElementById('prod-lista-cerrados');
+  if (!PROD_CERRADOS.length) { cont.innerHTML = '<div class="aviso">Todavía no hay lotes terminados.</div>'; return; }
+  const q = normalizarTexto((document.getElementById('prod-buscar-cerrados').value || '').trim());
+  const filtrados = q ? PROD_CERRADOS.filter(l => prodCoincide(l.produccion_items?.nombre, q)) : PROD_CERRADOS;
+  if (!filtrados.length) { cont.innerHTML = '<div class="aviso">Ningún lote terminado coincide con la búsqueda.</div>'; return; }
+  const data = q ? filtrados.slice(0, 200) : filtrados.slice(0, 60);
   const esAdmin = USUARIO_ACTUAL && USUARIO_ACTUAL.rol === 'admin';
-  cont.innerHTML = '<div class="aviso">Los últimos 60 lotes terminados.</div>' + data.map(l => {
+  cont.innerHTML = `<div class="aviso">${q ? `${filtrados.length} ${filtrados.length === 1 ? 'lote terminado coincide' : 'lotes terminados coinciden'}${filtrados.length > data.length ? ` (se muestran los ${data.length} más recientes)` : ''}.` : `Los últimos ${data.length} lotes terminados. Para ver los anteriores, buscá el producto.`}</div>` + data.map(l => {
     const u = prodTxtUni(prodUnidadLote(l));
     const merma = prodAIngreso(l, l.cantidad_merma || 0), prod = prodAIngreso(l, l.cantidad_producida);
     return `<div class="card" style="padding:10px;margin:8px 0">
@@ -4439,6 +4508,7 @@ let PROVEEDORES_PLAZO = []; // { id, nombre, plazo_pago_dias }
 document.getElementById('ie-conceptos-lista').innerHTML = CONCEPTOS_EGRESO.map(c => `<option value="${c}">`).join('');
 
 document.getElementById('btn-nav-ingresos').onclick = async () => {
+  histReiniciar();
   await cargarListaIngresosEgresos();
   document.getElementById('ingreso-egreso-form').classList.add('oculto');
   mostrarPantalla('ingresos');
@@ -4518,22 +4588,171 @@ async function cargarProveedoresPlazo() {
   document.getElementById('ie-proveedores-lista').innerHTML = PROVEEDORES_PLAZO.map(p => `<option value="${p.nombre.replace(/"/g, '&quot;')}">`).join('');
 }
 
+// ---------- Historial de movimientos (admin y encargado): buscador por fecha, mes, proveedor, N° de comprobante o producto ----------
+let HIST_GRUPOS = [];
+let HIST_MOSTRADOS = 0;
+const HIST_PAGINA = 40;
+const FORMAS_GASTO = ['deuda_proveedores', 'egreso_efectivo', 'egreso_banco', 'otras_deudas'];
+const histFecha = (f) => f ? new Date(f + 'T00:00:00').toLocaleDateString('es-AR') : '';
+
+// Una factura se carga como varias filas (una por concepto): se juntan en un solo renglón.
+function histClaveGrupo(m) {
+  if (m.comprobante_id) return 'c:' + m.comprobante_id;
+  if (m.concepto !== 'PAGO DEUDA PROVEEDORES' && m.proveedor_id && (m.factura_numero || m.remito_numero)) {
+    return ['f', m.proveedor_id, m.fecha, m.factura_numero || '', m.remito_numero || ''].join('|');
+  }
+  return 'i:' + m.id;
+}
+function histAgrupar(filas) {
+  const mapa = new Map();
+  filas.forEach(m => {
+    const k = histClaveGrupo(m);
+    let g = mapa.get(k);
+    if (!g) {
+      g = { key: k, comprobante_id: m.comprobante_id || null, fecha: m.fecha, proveedor: m.proveedores?.nombre || '', factura: m.factura_numero || '', remito: m.remito_numero || '', filas: [], total: 0 };
+      mapa.set(k, g);
+    }
+    g.filas.push(m);
+    g.total += Number(m.monto) || 0;
+    if (!g.factura && m.factura_numero) g.factura = m.factura_numero;
+    if (!g.remito && m.remito_numero) g.remito = m.remito_numero;
+  });
+  return Array.from(mapa.values());
+}
+function histPillGrupo(g) {
+  const formas = g.filas.map(f => f.forma);
+  if (formas.includes('deuda_proveedores')) return '<span class="pill pill-pendiente">A pagar</span>';
+  const f = formas[0];
+  return `<span class="pill pill-pagado">${escaparHtml(ETIQUETA_FORMA[f] || g.filas[0].estado_pago || '')}</span>`;
+}
+function histItemHtml(g, i) {
+  const comp = [g.factura ? 'Factura N° ' + g.factura : '', g.remito ? 'Remito N° ' + g.remito : ''].filter(Boolean).join(' · ');
+  const conceptos = Array.from(new Set(g.filas.map(f => f.concepto))).join(' + ');
+  return `<div class="hist-wrap" data-i="${i}">
+    <div class="lista-item">
+      <div style="min-width:0">
+        <div class="nombre">${escaparHtml(conceptos)}</div>
+        <div class="sub">${histFecha(g.fecha)}${g.proveedor ? ' · ' + escaparHtml(g.proveedor) : ''}${comp ? ' · ' + escaparHtml(comp) : ''}</div>
+        <button type="button" class="secundario btn-hist-detalle" style="width:auto;padding:6px 12px;margin:6px 0 0">Ver detalle</button>
+      </div>
+      <div style="text-align:right;flex:none"><div class="nombre">${formatoPesos(g.total)}</div>${histPillGrupo(g)}</div>
+    </div>
+    <div class="hist-det card oculto" style="margin:0 0 8px"></div>
+  </div>`;
+}
+function histRenderMas() {
+  const cont = document.getElementById('ingresos-lista');
+  const hasta = Math.min(HIST_GRUPOS.length, HIST_MOSTRADOS + HIST_PAGINA);
+  const html = HIST_GRUPOS.slice(HIST_MOSTRADOS, hasta).map((g, k) => histItemHtml(g, HIST_MOSTRADOS + k)).join('');
+  cont.insertAdjacentHTML('beforeend', html);
+  cont.querySelectorAll('.hist-wrap:not([data-listo])').forEach(w => {
+    w.dataset.listo = '1';
+    const btn = w.querySelector('.btn-hist-detalle');
+    btn.onclick = () => histAbrirDetalle(Number(w.dataset.i), w.querySelector('.hist-det'), btn);
+  });
+  HIST_MOSTRADOS = hasta;
+  document.getElementById('btn-hist-mas').classList.toggle('oculto', HIST_MOSTRADOS >= HIST_GRUPOS.length);
+}
+async function histAbrirDetalle(i, det, btn) {
+  const g = HIST_GRUPOS[i];
+  if (!det.classList.contains('oculto')) { det.classList.add('oculto'); btn.textContent = 'Ver detalle'; return; }
+  det.classList.remove('oculto');
+  btn.textContent = 'Ocultar detalle';
+  if (det.dataset.listo) return;
+  det.innerHTML = 'Cargando...';
+  let html = '';
+  if (g.filas.length > 1) {
+    html += '<div class="sub" style="margin-bottom:4px">Cómo se reparte en el estado de resultados</div>' +
+      g.filas.map(f => `<div class="desglose-fila"><span>${escaparHtml(f.concepto)}</span><span>${formatoPesos(f.monto)}</span></div>`).join('');
+  }
+  const f0 = g.filas[0];
+  const extra = [f0.medio_pago ? 'Medio de pago: ' + f0.medio_pago : '', f0.fecha_pago ? 'Pagado el ' + histFecha(f0.fecha_pago) : '', f0.observaciones || ''].filter(Boolean);
+  if (extra.length) html += `<div class="sub" style="margin:6px 0">${extra.map(escaparHtml).join(' · ')}</div>`;
+  if (g.comprobante_id) {
+    const { data, error } = await sb.from('factura_items').select('*').eq('comprobante_id', g.comprobante_id).order('created_at').order('id');
+    if (error) {
+      html += `<div class="estado-box estado-error">${escaparHtml(error.message)}${/factura_items/.test(error.message) ? ' — falta correr la migración 0067.' : ''}</div>`;
+    } else if (!data || !data.length) {
+      html += '<div class="aviso">Este comprobante no tiene productos guardados.</div>';
+    } else {
+      const n = (v) => Number(v).toLocaleString('es-AR', { maximumFractionDigits: 3 });
+      html += '<div class="sub" style="margin:8px 0 4px"><b>Mercadería de este comprobante</b></div>' + data.map(it => `
+        <div class="desglose-fila"><span>${escaparHtml(it.descripcion)}<br><span class="sub">${it.cantidad != null ? n(it.cantidad) + ' ' + (it.unidad || '') : ''}${it.precio_unitario != null ? ' × ' + formatoPesos(it.precio_unitario) : ''}${it.categoria ? ' · ' + escaparHtml(it.categoria) : ''}</span></span><span>${it.total != null ? formatoPesos(it.total) : ''}</span></div>`).join('');
+    }
+  } else if (f0.origen === 'manual') {
+    html += '<div class="aviso">Este movimiento se cargó a mano, sin detalle de productos.</div>';
+  } else {
+    html += '<div class="aviso">Este comprobante se cargó antes de que la app guardara el detalle de los productos. Se ve la fecha, el proveedor, el número y el monto.</div>';
+  }
+  det.innerHTML = html;
+  det.dataset.listo = '1';
+}
+
 async function cargarListaIngresosEgresos() {
   const cont = document.getElementById('ingresos-lista');
+  const res = document.getElementById('ingresos-resumen');
   cont.innerHTML = 'Cargando...';
-  const { data, error } = await sb.from('ingresos_egresos').select('*,proveedores(nombre)').order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(30);
-  if (error) { cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`; return; }
-  if (!data || !data.length) { cont.innerHTML = '<div class="aviso">No hay movimientos cargados.</div>'; return; }
-  cont.innerHTML = '<div class="aviso">Últimos 30 movimientos.</div>' + data.map(m => `
-    <div class="lista-item">
-      <div>
-        <div class="nombre">${m.concepto}</div>
-        <div class="sub">${m.fecha}${m.proveedores?.nombre ? ' · ' + m.proveedores.nombre : ''} · ${formatoPesos(m.monto)}</div>
-      </div>
-      <span class="pill ${m.forma === 'deuda_proveedores' ? 'pill-pendiente' : 'pill-pagado'}">${ETIQUETA_FORMA[m.forma] || m.estado_pago}</span>
-    </div>
-  `).join('');
+  res.innerHTML = '';
+  document.getElementById('btn-hist-mas').classList.add('oculto');
+  try {
+    const desde = document.getElementById('hist-desde').value;
+    const hasta = document.getElementById('hist-hasta').value;
+    const tipo = document.getElementById('hist-tipo').value;
+    const texto = document.getElementById('hist-texto').value.replace(/[,()%*"\\]/g, ' ').trim();
+    let filtroTexto = '';
+    if (texto) {
+      const partes = [`factura_numero.ilike.*${texto}*`, `remito_numero.ilike.*${texto}*`, `concepto.ilike.*${texto}*`];
+      const { data: provs } = await sb.from('proveedores').select('id').ilike('nombre', '%' + texto + '%').limit(200);
+      if (provs && provs.length) partes.push(`proveedor_id.in.(${provs.map(p => p.id).join(',')})`);
+      let qi = sb.from('factura_items').select('comprobante_id').ilike('descripcion', '%' + texto + '%').limit(500);
+      if (desde) qi = qi.gte('fecha', desde);
+      if (hasta) qi = qi.lte('fecha', hasta);
+      const { data: items } = await qi;
+      const ids = Array.from(new Set((items || []).map(i => i.comprobante_id)));
+      if (ids.length) partes.push(`comprobante_id.in.(${ids.join(',')})`);
+      filtroTexto = partes.join(',');
+    }
+    const filas = await traerTodo(() => {
+      let q = sb.from('ingresos_egresos').select('*,proveedores(nombre)').order('fecha', { ascending: false }).order('created_at', { ascending: false }).order('id');
+      if (desde) q = q.gte('fecha', desde);
+      if (hasta) q = q.lte('fecha', hasta);
+      if (tipo === 'deuda') q = q.eq('forma', 'deuda_proveedores');
+      if (tipo === 'pagado') q = q.in('forma', ['egreso_efectivo', 'egreso_banco']);
+      if (filtroTexto) q = q.or(filtroTexto);
+      return q;
+    });
+    HIST_GRUPOS = histAgrupar(filas);
+    HIST_MOSTRADOS = 0;
+    cont.innerHTML = '';
+    document.getElementById('ingresos-cant').textContent = `(${HIST_GRUPOS.length})`;
+    if (!HIST_GRUPOS.length) { res.innerHTML = '<div class="aviso">No hay movimientos con esos filtros.</div>'; return; }
+    const gastos = filas.filter(f => FORMAS_GASTO.includes(f.forma)).reduce((a, f) => a + (Number(f.monto) || 0), 0);
+    const ingresos = filas.filter(f => f.forma === 'otros_ingresos').reduce((a, f) => a + (Number(f.monto) || 0), 0);
+    res.innerHTML = `<div class="card"><div class="desglose-fila"><span>Movimientos encontrados</span><span>${HIST_GRUPOS.length}</span></div>
+      <div class="desglose-fila"><span>Compras y gastos</span><span>${formatoPesos(gastos)}</span></div>
+      ${ingresos ? `<div class="desglose-fila"><span>Otros ingresos</span><span>${formatoPesos(ingresos)}</span></div>` : ''}</div>`;
+    histRenderMas();
+  } catch (e) {
+    cont.innerHTML = `<div class="estado-box estado-error">${escaparHtml(e.message || String(e))}</div>`;
+  }
 }
+function histFijarMes(ym) {
+  document.getElementById('hist-mes').value = ym || '';
+  document.getElementById('hist-desde').value = ym ? ym + '-01' : '';
+  document.getElementById('hist-hasta').value = ym ? ultimoDiaDelMes(ym) : '';
+}
+function histReiniciar() {
+  document.getElementById('hist-texto').value = '';
+  document.getElementById('hist-tipo').value = '';
+  const d = new Date();
+  histFijarMes(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+}
+document.getElementById('btn-hist-buscar').onclick = cargarListaIngresosEgresos;
+document.getElementById('btn-hist-todo').onclick = () => { histFijarMes(''); cargarListaIngresosEgresos(); };
+document.getElementById('btn-hist-mas').onclick = histRenderMas;
+document.getElementById('hist-mes').onchange = (e) => { histFijarMes(e.target.value); cargarListaIngresosEgresos(); };
+['hist-desde', 'hist-hasta'].forEach(id => { document.getElementById(id).onchange = () => { document.getElementById('hist-mes').value = ''; }; });
+document.getElementById('hist-texto').addEventListener('keydown', (e) => { if (e.key === 'Enter') cargarListaIngresosEgresos(); });
 
 document.getElementById('btn-nuevo-ingreso-egreso').onclick = async () => {
   document.getElementById('ie-fecha').value = isoDeFecha(new Date());
@@ -4542,6 +4761,7 @@ document.getElementById('btn-nuevo-ingreso-egreso').onclick = async () => {
   document.getElementById('ie-monto').value = '';
   document.getElementById('ie-forma').value = 'deuda_proveedores';
   document.getElementById('ie-factura-numero').value = '';
+  document.getElementById('ie-comprobante-tipo').value = 'factura';
   document.getElementById('ie-observaciones').value = '';
   document.getElementById('ingreso-egreso-form').classList.remove('oculto');
   await cargarProveedoresPlazo();
@@ -4602,7 +4822,8 @@ document.getElementById('btn-guardar-ingreso-egreso').onclick = async () => {
     fecha,
     proveedor_id: proveedorId,
     concepto,
-    factura_numero: document.getElementById('ie-factura-numero').value.trim() || null,
+    factura_numero: document.getElementById('ie-comprobante-tipo').value === 'factura' ? (document.getElementById('ie-factura-numero').value.trim() || null) : null,
+    remito_numero: document.getElementById('ie-comprobante-tipo').value === 'remito' ? (document.getElementById('ie-factura-numero').value.trim() || null) : null,
     monto,
     forma,
     estado_pago: esDeuda ? 'pendiente' : 'pagado',
@@ -5053,9 +5274,26 @@ document.getElementById('btn-nav-calendario').onclick = async () => {
 document.getElementById('btn-volver-calendario').onclick = () => irAHome();
 document.getElementById('btn-calendario-ver-pagados').onclick = () => {
   calendarioVerPagados = !calendarioVerPagados;
-  document.getElementById('btn-calendario-ver-pagados').textContent = calendarioVerPagados ? 'Ocultar pagados' : 'Ver pagados recientes';
-  renderCalendario();
+  document.getElementById('btn-calendario-ver-pagados').textContent = calendarioVerPagados ? 'Ocultar pagados' : 'Ver pagados';
+  document.getElementById('cal-pag-filtros').classList.toggle('oculto', !calendarioVerPagados);
+  if (calendarioVerPagados && !document.getElementById('cal-pag-mes').value && !calPagTodo) document.getElementById('cal-pag-mes').value = mesActualYM();
+  cargarCalendario();
 };
+let calPagTodo = false;
+document.getElementById('cal-pag-mes').onchange = () => { calPagTodo = false; cargarCalendario(); };
+document.getElementById('cal-pag-texto').oninput = () => renderCalendario();
+document.getElementById('btn-cal-pag-todo').onclick = () => { calPagTodo = true; document.getElementById('cal-pag-mes').value = ''; cargarCalendario(); };
+
+// Factura o remito de un pago del calendario, con su número (los que vienen de una deuda cargada en la app traen también el remito).
+function comprobanteCalendario(c) {
+  const ie = c.ingresos_egresos || {};
+  const fac = c.nro_factura || ie.factura_numero || '';
+  const rem = ie.remito_numero || '';
+  if (fac && c.facturado !== 'NO') return { tipo: 'Factura', num: fac, texto: 'Factura N° ' + fac + (rem ? ' · Remito N° ' + rem : '') };
+  if (rem) return { tipo: 'Remito', num: rem, texto: 'Remito N° ' + rem };
+  if (fac) return { tipo: 'Remito / sin factura', num: fac, texto: 'Remito (sin factura) N° ' + fac };
+  return { tipo: '', num: '', texto: c.facturado === 'NO' ? 'Remito / sin factura (sin número cargado)' : 'Sin número de comprobante cargado' };
+}
 
 function diasHasta(fechaIso) {
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
@@ -5067,14 +5305,24 @@ async function cargarCalendario() {
   const cont = document.getElementById('calendario-lista');
   cont.innerHTML = 'Cargando...';
   try {
-    const hace30 = new Date(); hace30.setDate(hace30.getDate() - 30);
-    const [pend, pag] = await Promise.all([
-      sb.from('calendario_pagos').select('*').eq('pagado', false).order('fecha_vencimiento').limit(1000),
-      sb.from('calendario_pagos').select('*').eq('pagado', true).gte('fecha_vencimiento', hace30.toISOString().slice(0, 10)).order('fecha_vencimiento', { ascending: false }).limit(300)
-    ]);
+    // Trae también el N° de remito del movimiento de origen; si esa relación no responde, sigue sin ese dato.
+    let sel = '*,ingresos_egresos(factura_numero,remito_numero)';
+    let pend = await sb.from('calendario_pagos').select(sel).eq('pagado', false).order('fecha_vencimiento').limit(1000);
+    if (pend.error) { sel = '*'; pend = await sb.from('calendario_pagos').select(sel).eq('pagado', false).order('fecha_vencimiento').limit(1000); }
     if (pend.error) throw pend.error;
-    if (pag.error) throw pag.error;
-    CALENDARIO = (pend.data || []).concat(pag.data || []);
+    let pagados = [];
+    if (calendarioVerPagados) {
+      const mes = calPagTodo ? '' : document.getElementById('cal-pag-mes').value;
+      pagados = await traerTodo(() => {
+        let q = sb.from('calendario_pagos').select(sel).eq('pagado', true).order('fecha_pago', { ascending: false, nullsFirst: false }).order('fecha_vencimiento', { ascending: false }).order('id');
+        if (mes) {
+          const d = mes + '-01', h = ultimoDiaDelMes(mes);
+          q = q.or(`and(fecha_pago.gte.${d},fecha_pago.lte.${h}),and(fecha_pago.is.null,fecha_vencimiento.gte.${d},fecha_vencimiento.lte.${h})`);
+        }
+        return q;
+      });
+    }
+    CALENDARIO = (pend.data || []).concat(pagados);
     DESCUENTO_EFECTIVO = {};
     const dto = await sb.from('proveedores').select('id,descuento_efectivo_pct').gt('descuento_efectivo_pct', 0);
     if (!dto.error) (dto.data || []).forEach(p => { DESCUENTO_EFECTIVO[p.id] = Number(p.descuento_efectivo_pct); });
@@ -5102,7 +5350,12 @@ function renderCalendario() {
     ['Próximos 30 días', pendientes.filter(c => { const d = diasHasta(c.fecha_vencimiento); return d > 7 && d <= 30; }), false],
     ['Más adelante', pendientes.filter(c => diasHasta(c.fecha_vencimiento) > 30), false]
   ];
-  if (calendarioVerPagados) grupos.push(['Pagados (últimos 30 días)', CALENDARIO.filter(c => c.pagado), false]);
+  if (calendarioVerPagados) {
+    const q = normalizarTexto((document.getElementById('cal-pag-texto').value || '').trim());
+    const mesTxt = calPagTodo || !document.getElementById('cal-pag-mes').value ? 'todo el historial' : etiquetaMes(document.getElementById('cal-pag-mes').value);
+    const pagadosVer = CALENDARIO.filter(c => c.pagado).filter(c => !q || normalizarTexto([c.proveedor_texto, c.nro_factura, c.concepto, c.nota, comprobanteCalendario(c).num].filter(Boolean).join(' ')).includes(q));
+    grupos.push([`Pagados (${mesTxt})`, pagadosVer, false]);
+  }
 
   const itemHtml = (c) => {
     const d = diasHasta(c.fecha_vencimiento);
@@ -5112,7 +5365,7 @@ function renderCalendario() {
     return `<div class="lista-item" style="${rojo ? 'border-color:var(--rojo)' : ''}">
       <div>
         <div class="nombre">${c.proveedor_texto}</div>
-        <div class="sub">${new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')} · <span class="${rojo ? 'bajo-minimo' : ''}">${cuando}</span>${c.nro_factura ? ' · Fact. ' + c.nro_factura : ''}${c.concepto ? ' · ' + c.concepto : ''}</div>
+        <div class="sub">${new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')} · <span class="${rojo ? 'bajo-minimo' : ''}">${cuando}</span> · ${escaparHtml(comprobanteCalendario(c).texto)}${c.concepto ? ' · ' + c.concepto : ''}</div>
         ${c.nota ? `<div class="sub">${c.nota}</div>` : ''}
       </div>
       <div style="text-align:right;flex:none">
@@ -5151,6 +5404,8 @@ function abrirPagoCalendario(id) {
   document.getElementById('cal-modo').value = 'pagar';
   document.getElementById('cal-wrap-pagar').classList.remove('oculto');
   document.getElementById('cal-wrap-editar').classList.add('oculto');
+  const comp = comprobanteCalendario(c);
+  document.getElementById('cal-pago-comprobante').innerHTML = `<b>${escaparHtml(comp.texto)}</b>${c.fecha_factura ? ' · del ' + histFecha(c.fecha_factura) : ''}${c.concepto ? ' · ' + escaparHtml(c.concepto) : ''}`;
   document.getElementById('cal-pago-forma').value = 'egreso_banco';
   document.getElementById('cal-pago-fecha').value = new Date().toISOString().slice(0, 10);
   document.getElementById('cal-resultado').innerHTML = '';
