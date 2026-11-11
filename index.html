@@ -5369,16 +5369,38 @@ document.getElementById('btn-eerr-guardar').onclick = async () => {
 // ---------- Calendario de pagos a proveedores (admin) ----------
 let CALENDARIO = [];
 let DESCUENTO_EFECTIVO = {}; // proveedor_id -> % de descuento si se paga en efectivo
+let PROV_SEMANAL = {}; // proveedor_id -> día de la semana en que cobra (1 = lunes ... 7 = domingo): se acumulan las boletas de la semana
+let CAL_GRUPOS = {}; // 'proveedor|vencimiento' -> boletas de esa semana
+let calendarioGrupoIds = null; // ids de las boletas que se están pagando juntas
+
+// Las boletas de un proveedor semanal (Zecor, Papu) se suman en un solo renglón por semana.
+function agruparSemanales(lista) {
+  CAL_GRUPOS = {};
+  const salida = [], mapa = {};
+  lista.forEach(c => {
+    if (c.proveedor_id && PROV_SEMANAL[c.proveedor_id]) {
+      const k = c.proveedor_id + '|' + c.fecha_vencimiento;
+      let g = mapa[k];
+      if (!g) { g = mapa[k] = { grupo: true, key: k, proveedor_id: c.proveedor_id, proveedor_texto: c.proveedor_texto, fecha_vencimiento: c.fecha_vencimiento, total: 0, pagado: false, items: [] }; CAL_GRUPOS[k] = g; salida.push(g); }
+      g.items.push(c);
+      g.total += Number(c.total);
+    } else salida.push(c);
+  });
+  return salida;
+}
 
 // Avisa cuanto se paga de verdad si el proveedor hace descuento por efectivo
 function actualizarAvisoDescuentoCalendario() {
-  const c = CALENDARIO.find(x => x.id === calendarioEditandoId);
   const aviso = document.getElementById('cal-pago-dto-aviso'), forma = document.getElementById('cal-pago-forma').value;
-  const pct = c && c.proveedor_id ? DESCUENTO_EFECTIVO[c.proveedor_id] : 0;
   document.getElementById('cal-pago-ya-aviso').classList.toggle('oculto', forma !== 'ya_pagado');
-  if (c && pct > 0 && forma === 'egreso_efectivo' && c.egreso_id) {
-    const desc = Math.round(Number(c.total) * pct) / 100;
-    aviso.textContent = `${c.proveedor_texto} hace ${pct}% de descuento por efectivo: se paga ${formatoPesos(Number(c.total) - desc)} (descuento ${formatoPesos(desc)}) y el gasto baja por ese descuento.`;
+  const boletas = calendarioGrupoIds ? CALENDARIO.filter(x => calendarioGrupoIds.includes(x.id)) : CALENDARIO.filter(x => x.id === calendarioEditandoId);
+  const c = boletas[0];
+  const pct = c && c.proveedor_id ? DESCUENTO_EFECTIVO[c.proveedor_id] : 0;
+  const conDto = boletas.filter(b => b.egreso_id);
+  if (c && pct > 0 && forma === 'egreso_efectivo' && conDto.length) {
+    const base = conDto.reduce((a, b) => a + Number(b.total), 0);
+    const desc = Math.round(base * pct) / 100;
+    aviso.textContent = `${c.proveedor_texto} hace ${pct}% de descuento por efectivo: se paga ${formatoPesos(base - desc)} (descuento ${formatoPesos(desc)}) y el gasto baja por ese descuento.`;
     aviso.classList.remove('oculto');
   } else aviso.classList.add('oculto');
 }
@@ -5446,6 +5468,9 @@ async function cargarCalendario() {
     DESCUENTO_EFECTIVO = {};
     const dto = await sb.from('proveedores').select('id,descuento_efectivo_pct').gt('descuento_efectivo_pct', 0);
     if (!dto.error) (dto.data || []).forEach(p => { DESCUENTO_EFECTIVO[p.id] = Number(p.descuento_efectivo_pct); });
+    PROV_SEMANAL = {};
+    const sem = await sb.from('proveedores').select('id,pago_semanal_dia').not('pago_semanal_dia', 'is', null);
+    if (!sem.error) (sem.data || []).forEach(p => { PROV_SEMANAL[p.id] = Number(p.pago_semanal_dia); });
     renderCalendario();
   } catch (e) {
     cont.innerHTML = `<div class="estado-box estado-error">${e.message}</div>`;
@@ -5454,7 +5479,7 @@ async function cargarCalendario() {
 
 function renderCalendario() {
   const cont = document.getElementById('calendario-lista');
-  const pendientes = CALENDARIO.filter(c => !c.pagado);
+  const pendientes = agruparSemanales(CALENDARIO.filter(c => !c.pagado));
   const total = pendientes.reduce((a, c) => a + Number(c.total), 0);
   const vencidos = pendientes.filter(c => diasHasta(c.fecha_vencimiento) < 0);
   const semana = pendientes.filter(c => { const d = diasHasta(c.fecha_vencimiento); return d >= 0 && d <= 7; });
@@ -5482,6 +5507,22 @@ function renderCalendario() {
     const cuando = c.pagado ? `pagado ${c.fecha_pago ? new Date(c.fecha_pago + 'T00:00:00').toLocaleDateString('es-AR') : ''}`
       : (d < 0 ? `vencido hace ${-d} día${d === -1 ? '' : 's'}` : (d === 0 ? 'vence HOY' : `vence en ${d} día${d === 1 ? '' : 's'}`));
     const rojo = !c.pagado && d < 0;
+    if (c.grupo) {
+      const n = c.items.length;
+      return `<div class="lista-item" style="${rojo ? 'border-color:var(--rojo)' : ''}">
+        <div style="min-width:0">
+          <div class="nombre">${escaparHtml(c.proveedor_texto)} · pago semanal</div>
+          <div class="sub">${diaSemana(c.fecha_vencimiento)} ${new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-AR')} · <span class="${rojo ? 'bajo-minimo' : ''}">${cuando}</span> · ${n} ${n === 1 ? 'boleta' : 'boletas'}</div>
+          <details style="margin-top:6px"><summary class="sub" style="cursor:pointer">Ver las boletas</summary>
+            ${c.items.map(b => `<div class="desglose-fila"><span>${b.fecha_factura ? histFecha(b.fecha_factura) + ' · ' : ''}${escaparHtml(comprobanteCalendario(b).texto)}${b.concepto ? ' · ' + escaparHtml(b.concepto) : ''}</span><span>${formatoPesos(b.total)} <button type="button" class="secundario btn-cal-editar" data-id="${b.id}" style="width:auto;padding:2px 8px;margin:0 0 0 6px;font-size:12px">Editar</button></span></div>`).join('')}
+          </details>
+        </div>
+        <div style="text-align:right;flex:none">
+          <div class="nombre">${formatoPesos(c.total)}</div>
+          <button type="button" class="secundario btn-cal-pagar-grupo" data-k="${escaparHtml(c.key)}" style="width:auto;padding:6px 12px;margin:4px 0 0">Pagar todo</button>
+        </div>
+      </div>`;
+    }
     return `<div class="lista-item" style="${rojo ? 'border-color:var(--rojo)' : ''}">
       <div>
         <div class="nombre">${c.proveedor_texto}</div>
@@ -5504,6 +5545,7 @@ function renderCalendario() {
   cont.innerHTML = html || '<div class="aviso">No hay pagos pendientes. 👍</div>';
 
   cont.querySelectorAll('.btn-cal-pagar').forEach(b => { b.onclick = () => abrirPagoCalendario(b.dataset.id); });
+  cont.querySelectorAll('.btn-cal-pagar-grupo').forEach(b => { b.onclick = () => abrirPagoGrupo(b.dataset.k); });
   cont.querySelectorAll('.btn-cal-editar').forEach(b => { b.onclick = () => abrirEditarCalendario(b.dataset.id); });
   cont.querySelectorAll('.btn-cal-deshacer').forEach(b => {
     b.onclick = async () => {
@@ -5517,9 +5559,31 @@ function renderCalendario() {
   });
 }
 
+// Pagar de una vez todas las boletas de la semana de un proveedor semanal (Zecor, Papu)
+function abrirPagoGrupo(key) {
+  const g = CAL_GRUPOS[key];
+  if (!g) return;
+  calendarioEditandoId = null;
+  calendarioGrupoIds = g.items.map(x => x.id);
+  const n = g.items.length;
+  document.getElementById('cal-form-titulo').textContent = `Pagar a ${g.proveedor_texto} · ${formatoPesos(g.total)} (${n} ${n === 1 ? 'boleta' : 'boletas'})`;
+  document.getElementById('cal-modo').value = 'pagar';
+  document.getElementById('cal-wrap-pagar').classList.remove('oculto');
+  document.getElementById('cal-wrap-editar').classList.add('oculto');
+  document.getElementById('cal-pago-comprobante').innerHTML = '<b>Boletas de la semana:</b><br>' + g.items.map(b => `${b.fecha_factura ? histFecha(b.fecha_factura) + ' · ' : ''}${escaparHtml(comprobanteCalendario(b).texto)} · ${formatoPesos(b.total)}`).join('<br>');
+  document.getElementById('cal-pago-forma').value = 'egreso_efectivo';
+  document.getElementById('cal-pago-fecha').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('cal-resultado').innerHTML = '';
+  document.getElementById('btn-cal-eliminar').classList.add('oculto');
+  actualizarAvisoDescuentoCalendario();
+  document.getElementById('calendario-form').classList.remove('oculto');
+  document.getElementById('calendario-form').scrollIntoView({ behavior: 'smooth' });
+}
+
 function abrirPagoCalendario(id) {
   const c = CALENDARIO.find(x => x.id === id);
   if (!c) return;
+  calendarioGrupoIds = null;
   calendarioEditandoId = id;
   document.getElementById('cal-form-titulo').textContent = `Pagar a ${c.proveedor_texto} · ${formatoPesos(c.total)}`;
   document.getElementById('cal-modo').value = 'pagar';
@@ -5539,6 +5603,7 @@ function abrirPagoCalendario(id) {
 function abrirEditarCalendario(id) {
   const c = CALENDARIO.find(x => x.id === id);
   if (!c) return;
+  calendarioGrupoIds = null;
   calendarioEditandoId = id;
   document.getElementById('cal-form-titulo').textContent = c ? `Editar pago de ${c.proveedor_texto}` : 'Nuevo pago';
   document.getElementById('cal-modo').value = 'editar';
@@ -5556,6 +5621,7 @@ function abrirEditarCalendario(id) {
 }
 
 document.getElementById('btn-calendario-nuevo').onclick = () => {
+  calendarioGrupoIds = null;
   calendarioEditandoId = null;
   document.getElementById('cal-form-titulo').textContent = 'Nuevo pago en el calendario';
   document.getElementById('cal-modo').value = 'nuevo';
@@ -5586,6 +5652,25 @@ document.getElementById('btn-cal-confirmar').onclick = async () => {
   const modo = document.getElementById('cal-modo').value;
   const res = document.getElementById('cal-resultado');
   res.innerHTML = '';
+  if (modo === 'pagar' && calendarioGrupoIds) {
+    const formaG = document.getElementById('cal-pago-forma').value;
+    const fechaG = document.getElementById('cal-pago-fecha').value || null;
+    if (formaG === 'ya_pagado') {
+      for (const id of calendarioGrupoIds) {
+        const { error } = await sb.from('calendario_pagos').update({ pagado: true, fecha_pago: fechaG, medio_pago: 'ya anotado' }).eq('id', id);
+        if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}</div>`; return; }
+        const cc = CALENDARIO.find(x => x.id === id);
+        if (cc && cc.egreso_id) await sb.from('ingresos_egresos').update({ estado_pago: 'pagado', fecha_pago: fechaG }).eq('id', cc.egreso_id);
+      }
+    } else {
+      const { error } = await sb.rpc('pagar_calendario_grupo', { p_ids: calendarioGrupoIds, p_forma: formaG, p_fecha: fechaG });
+      if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${error.message}${/pagar_calendario_grupo/.test(error.message) ? ' — falta correr la migración 0069.' : ''}</div>`; return; }
+    }
+    calendarioGrupoIds = null;
+    document.getElementById('calendario-form').classList.add('oculto');
+    await cargarCalendario();
+    return;
+  }
   if (modo === 'pagar' && document.getElementById('cal-pago-forma').value === 'ya_pagado') {
     const fechaYa = document.getElementById('cal-pago-fecha').value || null;
     const { error } = await sb.from('calendario_pagos').update({ pagado: true, fecha_pago: fechaYa, medio_pago: 'ya anotado' }).eq('id', calendarioEditandoId);
