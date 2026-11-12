@@ -2235,7 +2235,8 @@ document.getElementById('btn-nav-stock').onclick = async () => {
     cont.innerHTML = `<div class="estado-box estado-error">${error.message}</div>`;
     STOCK_DATA = [];
   }
-  document.getElementById('btn-stock-contar').classList.toggle('oculto', !esGestor());
+  // Contar stock lo pueden hacer todos los roles (admin, encargado y cocina): queda anotado quién contó cada cosa
+  document.getElementById('btn-stock-contar').classList.remove('oculto');
   mostrarPantalla('stock');
 };
 
