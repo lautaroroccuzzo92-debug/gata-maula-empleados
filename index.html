@@ -3319,11 +3319,15 @@ function renderDescuento(e) {
 }
 function renderDescVinculados() {
   const q = normalizarTexto(document.getElementById('desc-vinc-buscar').value.trim());
-  const vinc = DESC_PROD.filter(p => (p.vinculos || []).length || p.omitir);
+  const vinc = DESC_PROD.filter(p => (p.vinculos || []).length || p.omitir || p.receta);
   document.getElementById('desc-vinc-cant').textContent = `(${vinc.length})`;
   const lista = vinc.filter(p => !q || normalizarTexto(p.producto).includes(q));
   const cont = document.getElementById('desc-vinc');
-  cont.innerHTML = lista.map(p => `<div class="lista-item"><div><div class="nombre">${escaparHtml(p.producto)}</div><div class="sub">${escaparHtml(textoVinculos(p))}</div></div><button type="button" class="secundario desc-edit" data-p="${escaparHtml(p.producto)}" style="width:auto;margin:0">Editar</button></div>`).join('') || '<div class="aviso">Nada para mostrar.</div>';
+  // Los platos con receta descuentan sus ingredientes por la receta (la receta se cambia en la pantalla Recetas)
+  const textoItem = (p) => p.receta
+    ? `Descuenta por receta: ${p.receta}${p.receta_modo === 'lote' ? ' · se descuenta al elaborar el lote, no al vender' : ''}`
+    : textoVinculos(p);
+  cont.innerHTML = lista.map(p => `<div class="lista-item"><div><div class="nombre">${escaparHtml(p.producto)}</div><div class="sub">${escaparHtml(textoItem(p))}</div></div>${p.receta ? '<span class="pill pill-pagado">Receta</span>' : `<button type="button" class="secundario desc-edit" data-p="${escaparHtml(p.producto)}" style="width:auto;margin:0">Editar</button>`}</div>`).join('') || '<div class="aviso">Nada para mostrar.</div>';
   cont.querySelectorAll('.desc-edit').forEach(b => { b.onclick = () => abrirEditorDescuento(b.dataset.p); });
 }
 document.getElementById('desc-vinc-buscar').addEventListener('input', renderDescVinculados);
