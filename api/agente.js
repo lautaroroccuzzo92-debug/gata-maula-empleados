@@ -52,11 +52,12 @@ const HERRAMIENTAS = [
       input_schema: { type: 'object', properties: { categoria: { type: 'string' }, buscar: { type: 'string' }, solo_para_pedir: { type: 'boolean' } } }
     },
     async run(ctx, a) {
-      const filas = await traer(() => ctx.sb.from('stock').select('cantidad_actual,stock_minimo,unidad,dias_pedido,proveedor_pedido,cantidad_pedido,insumos(nombre,marca,subcategoria)').order('insumo_id'));
+      const filas = await traer(() => ctx.sb.from('stock').select('cantidad_actual,stock_minimo,unidad,dias_pedido,proveedor_pedido,cantidad_pedido,pedido_en,insumos(nombre,marca,subcategoria)').order('insumo_id'));
       let l = filas.map(s => ({
         categoria: s.insumos?.subcategoria, nombre: [s.insumos?.marca, s.insumos?.nombre].filter(Boolean).join(' '),
         hay: Number(s.cantidad_actual), minimo: Number(s.stock_minimo), unidad: s.unidad, proveedor: s.proveedor_pedido,
-        dias_pedido: s.dias_pedido, cantidad_a_pedir: s.cantidad_pedido, para_pedir: estaBajo(s)
+        dias_pedido: s.dias_pedido, cantidad_a_pedir: s.cantidad_pedido, para_pedir: estaBajo(s) && !s.pedido_en,
+        ya_pedido_esperando_que_llegue: s.pedido_en ? String(s.pedido_en).slice(0, 10) : undefined
       }));
       const resumen = {};
       l.forEach(x => { const r = resumen[x.categoria] = resumen[x.categoria] || { productos: 0, para_pedir: 0, sin_minimo: 0 }; r.productos++; if (x.para_pedir) r.para_pedir++; if (!(x.minimo > 0)) r.sin_minimo++; });
@@ -105,7 +106,11 @@ const HERRAMIENTAS = [
     def: {
       name: 'produccion_lotes',
       description: 'Lotes de producción de cocina (mayo de chimi, pesto, escabeches, etc.): los activos con fecha de elaboración, vencimiento, días que quedan, cantidad elaborada y quién los produjo; marca los vencidos y los que vencen en 2 días o menos. También hay cerrados recientes con lo usado y la merma.',
-      input_schema: { type: 'object', properties: { incluir_cerrados: { type: 'boolean', description: 'Sumar los últimos 30 lotes cerrados' }, buscar: { type: 'string', description: 'Filtrar por nombre de producto' } } }
+      input_schema: { type: 'object', properties: {
+        incluir_cerrados: { type: 'boolean', description: 'Sumar los últimos 30 lotes cerrados' },
+        buscar: { type: 'string', description: 'Filtrar por nombre de producto' },
+        desde: { type: 'string', description: 'YYYY-MM-DD. Para saber qué se elaboró en un período (por fecha de elaboración): devuelve TODOS los lotes elaborados entre desde y hasta, activos y terminados. Usalo cuando pregunten qué se produjo un día o una semana.' },
+        hasta: { type: 'string', description: 'YYYY-MM-DD (si falta, es igual a desde)' } } }
     },
     async run(ctx, a) {
       const hoy = hoyAR();
@@ -116,6 +121,17 @@ const HERRAMIENTAS = [
         estado: dias(l.vence_el) < 0 ? 'VENCIDO' : (dias(l.vence_el) <= 2 ? 'PRONTO A VENCER' : 'vigente'), cantidad: (l.unidad_ingreso === 'gr' ? Number(l.cantidad_producida) * 1000 : Number(l.cantidad_producida)) + ' ' + (l.unidad_ingreso === 'gr' ? 'gr' : (l.unidad_ingreso === 'unidad' ? 'unidades' : 'kg')), quien: l.producido_por, obs: l.observaciones }));
       if (a.buscar) { const q = a.buscar.toLowerCase(); activos = activos.filter(x => (x.producto || '').toLowerCase().includes(q)); }
       const salida = { hoy, lotes_activos: activos, vencidos: activos.filter(x => x.estado === 'VENCIDO').length, por_vencer: activos.filter(x => x.estado === 'PRONTO A VENCER').length };
+      if (a.desde) {
+        const hasta = a.hasta || a.desde;
+        const { data: p, error: e3 } = await ctx.sb.from('produccion_lotes').select('elaborado_el,estado,vida_util_dias,vence_el,unidad_ingreso,cantidad_producida,cantidad_merma,motivo_merma,producido_por,produccion_items(nombre)')
+          .gte('elaborado_el', a.desde).lte('elaborado_el', hasta).order('elaborado_el', { ascending: false }).limit(300);
+        if (e3) throw new Error(e3.message);
+        let lotes = p.map(l => ({ producto: l.produccion_items?.nombre, elaborado: l.elaborado_el, estado: l.estado === 'activo' ? 'activo' : 'terminado', vence: l.vence_el,
+          cantidad: (l.unidad_ingreso === 'gr' ? Number(l.cantidad_producida) * 1000 : Number(l.cantidad_producida)) + ' ' + (l.unidad_ingreso === 'gr' ? 'gr' : (l.unidad_ingreso === 'unidad' ? 'unidades' : 'kg')),
+          merma: Number(l.cantidad_merma) || 0, motivo_merma: l.motivo_merma, quien: l.producido_por }));
+        if (a.buscar) { const q = a.buscar.toLowerCase(); lotes = lotes.filter(x => (x.producto || '').toLowerCase().includes(q)); }
+        salida.lotes_elaborados_en_el_periodo = { desde: a.desde, hasta, cantidad_de_lotes: lotes.length, lotes };
+      }
       if (a.incluir_cerrados) {
         const { data: c, error: e2 } = await ctx.sb.from('produccion_lotes').select('elaborado_el,cantidad_producida,cantidad_merma,motivo_merma,produccion_items(nombre,unidad)').eq('estado', 'cerrado').order('cerrado_el', { ascending: false }).limit(30);
         if (e2) throw new Error(e2.message);

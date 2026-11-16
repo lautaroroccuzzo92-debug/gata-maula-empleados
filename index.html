@@ -438,6 +438,20 @@
     <button class="big" id="btn-guardar-desperdicio">Guardar desperdicio</button>
     <button class="secundario" id="btn-cancelar-desperdicio">Volver</button>
     <div id="desp-resultado"></div>
+    <details class="grupo-stock" id="desp-lista-det" style="margin-top:14px">
+      <summary><span>📋 Historial de desperdicios</span></summary>
+      <div class="grupo-stock-body">
+        <div class="aviso" style="margin-top:0">Todo lo que se tiró, con el producto, la cantidad, el motivo y quién lo cargó. Incluye la merma que se anota al terminar un lote en Producción.</div>
+        <input type="text" id="desp-lista-buscar" placeholder="Buscar por producto o motivo...">
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:8px">
+          <div style="flex:1;min-width:130px"><label style="margin-top:0">Desde</label><input type="date" id="desp-lista-desde"></div>
+          <div style="flex:1;min-width:130px"><label style="margin-top:0">Hasta</label><input type="date" id="desp-lista-hasta"></div>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="desp-lista-prod" style="width:auto;margin:0"> Solo lo que viene de Producción</label>
+        <button class="big" id="btn-desp-lista" type="button" style="margin-top:8px">Ver historial</button>
+        <div id="desp-lista" style="margin-top:10px"></div>
+      </div>
+    </details>
     <details class="grupo-stock oculto" id="desp-producto-det" style="margin-top:14px">
       <summary><span>📊 Desperdicio por producto</span></summary>
       <div class="grupo-stock-body">
@@ -659,6 +673,19 @@
       <button class="big" id="btn-sp-guardar">Guardar</button>
       <button class="secundario" id="btn-sp-cancelar">Cancelar</button>
       <button class="secundario" id="btn-sp-quitar" type="button" style="color:#b3262d">🗑️ Sacar este producto del stock</button>
+    </div>
+    <div id="stock-form-quitar" class="card oculto">
+      <h2 class="section-title" style="margin-top:0" id="sq-titulo">Sacar del stock</h2>
+      <div id="sq-uso" class="aviso" style="margin-top:0">Revisando...</div>
+      <div id="sq-reemplazo-bloque" class="oculto">
+        <label>¿Qué producto del stock lo reemplaza?</label>
+        <input type="text" id="sq-buscar" placeholder="Buscar el producto que lo reemplaza..." autocomplete="off">
+        <div id="sq-sugerencias" style="margin-top:6px"></div>
+        <div id="sq-elegido" class="sub" style="margin-top:6px"></div>
+      </div>
+      <div id="sq-resultado"></div>
+      <button class="big" id="btn-sq-confirmar" type="button" style="background:#b3262d">🗑️ Sacar del stock</button>
+      <button class="secundario" id="btn-sq-cancelar" type="button">Cancelar</button>
     </div>
     <div id="stock-lista"></div>
     <button class="secundario" id="btn-volver-stock">Volver</button>
@@ -2146,6 +2173,31 @@ async function cargarDesperdicioPorProducto() {
 }
 document.getElementById('btn-desp-producto').onclick = cargarDesperdicioPorProducto;
 
+// Historial de desperdicios (todos los roles; el valor en pesos solo lo ven admin y encargado)
+async function cargarDesperdicioLista() {
+  const cont = document.getElementById('desp-lista');
+  const desde = document.getElementById('desp-lista-desde').value, hasta = document.getElementById('desp-lista-hasta').value;
+  if (!desde || !hasta || desde > hasta) { cont.innerHTML = '<div class="aviso">Elegí las fechas (desde no puede ser después de hasta).</div>'; return; }
+  cont.innerHTML = 'Cargando...';
+  const { data, error } = await sb.rpc('desperdicios_lista', {
+    p_desde: desde, p_hasta: hasta, p_buscar: document.getElementById('desp-lista-buscar').value.trim() || null,
+    p_solo_produccion: document.getElementById('desp-lista-prod').checked
+  });
+  if (error) { cont.innerHTML = `<div class="aviso">${escaparHtml(error.message)}</div>`; return; }
+  if (!data.length) { cont.innerHTML = '<div class="aviso">No hay desperdicios que coincidan.</div>'; return; }
+  const total = data.reduce((s, x) => s + Number(x.valor || 0), 0);
+  const verValor = data.some(x => x.valor != null);
+  cont.innerHTML = `<div class="sub" style="margin-bottom:6px">${data.length} ${data.length === 1 ? 'registro' : 'registros'}${data.length >= 400 ? ' (se muestran los últimos 400: acotá las fechas o buscá un producto)' : ''}${verValor ? ' · total ' + fmtPesos(total) : ''}</div>` +
+    data.map(x => {
+      const f = x.fecha.split('-').reverse().slice(0, 2).join('/');
+      return `<div class="lista-item"><div><div class="nombre">${escaparHtml(x.producto)}${x.produccion ? ' <span class="grupo-cant">· Producción</span>' : ''}</div>
+        <div class="sub">${f} · ${fmtCantidadDesp(x.cantidad, x.unidad)}${x.quien ? ' · ' + escaparHtml(x.quien) : ''}</div>
+        <div class="sub">${escaparHtml(x.motivo || '')}</div></div>${x.valor != null ? `<div class="nombre">${fmtPesos(x.valor)}</div>` : ''}</div>`;
+    }).join('');
+}
+document.getElementById('btn-desp-lista').onclick = cargarDesperdicioLista;
+document.getElementById('desp-lista-buscar').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); cargarDesperdicioLista(); } });
+
 // Segun el insumo elegido: kg o gr (los que se miden en kg) o unidades
 function ajustarUnidadDesperdicio() {
   const ins = LISTA_INSUMOS.find(i => i.id === document.getElementById('desp-insumo-id').value);
@@ -2168,6 +2220,12 @@ document.getElementById('btn-nav-desperdicio').onclick = async () => {
   document.getElementById('desp-prod-desde').value = isoDeFecha(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
   document.getElementById('desp-prod-hasta').value = isoDeFecha(hoy);
   document.getElementById('desp-producto').innerHTML = '';
+  document.getElementById('desp-lista-buscar').value = '';
+  document.getElementById('desp-lista-prod').checked = false;
+  document.getElementById('desp-lista-desde').value = isoDeFecha(new Date(hoy.getTime() - 30 * 86400000));
+  document.getElementById('desp-lista-hasta').value = isoDeFecha(hoy);
+  document.getElementById('desp-lista').innerHTML = '';
+  document.getElementById('desp-lista-det').open = false;
   document.getElementById('desp-producto-det').classList.toggle('oculto', !(USUARIO_ACTUAL && ['admin', 'encargado'].includes(USUARIO_ACTUAL.rol)));
   mostrarPantalla('desperdicio');
   cargarHistorialDesperdicios();
@@ -2228,7 +2286,7 @@ document.getElementById('btn-nav-stock').onclick = async () => {
   cont.innerHTML = 'Cargando...';
   document.getElementById('stock-buscador').value = '';
   try {
-    STOCK_DATA = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,unidad,dias_pedido,proveedor_pedido,cantidad_pedido,insumos(nombre,marca,subcategoria)').order('insumo_id'));
+    STOCK_DATA = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,unidad,dias_pedido,proveedor_pedido,cantidad_pedido,pedido_en,insumos(nombre,marca,subcategoria)').order('insumo_id'));
     document.getElementById('stock-form-pedido').classList.add('oculto');
     renderStockLista('');
   } catch (error) {
@@ -2282,11 +2340,12 @@ function renderStockLista(filtro) {
       const minTxt = Number(s.stock_minimo) > 0 ? `mínimo ${fmtCant(s.stock_minimo)} ${unidadTxtStock(s)}` : 'sin mínimo cargado';
       return `<div class="lista-item">
         <div><div class="nombre">${s.insumos?.nombre || '(sin nombre)'}</div>${s.insumos?.marca ? `<div class="sub">${s.insumos.marca}</div>` : ''}
-          <div class="sub ${bajo ? 'bajo-minimo' : ''}">${bajo ? '⚠️ PEDIR · ' : ''}${minTxt}</div></div>
+          <div class="sub ${bajo && !s.pedido_en ? 'bajo-minimo' : ''}">${bajo ? (s.pedido_en ? '⏳ YA PEDIDO · ' : '⚠️ PEDIR · ') : ''}${minTxt}</div></div>
         <div class="stock-edit-wrap">
           <input type="number" step="0.01" class="stock-cantidad-input ${bajo ? 'bajo-minimo' : ''}" data-insumo-id="${s.insumo_id}" value="${Number(s.cantidad_actual)}">
           <span class="stock-guardado" data-insumo-id="${s.insumo_id}"></span>
           ${puedeConfigurar ? `<button type="button" class="secundario btn-config-pedido" data-id="${s.insumo_id}" title="Mínimo y datos de pedido" style="width:auto;padding:6px 10px;margin:0">⚙</button>` : ''}
+          <button type="button" class="secundario btn-quitar-stock" data-id="${s.insumo_id}" title="Sacar del stock" style="width:auto;padding:6px 10px;margin:0">🗑</button>
         </div>
       </div>`;
     }).join('');
@@ -2298,6 +2357,7 @@ function renderStockLista(filtro) {
   }).join('');
 
   cont.querySelectorAll('.btn-config-pedido').forEach(b => { b.onclick = () => abrirConfigPedido(b.dataset.id); });
+  cont.querySelectorAll('.btn-quitar-stock').forEach(b => { b.onclick = () => abrirQuitarStock(b.dataset.id); });
   cont.querySelectorAll('.stock-cantidad-input').forEach(input => {
     input.addEventListener('change', async (e) => {
       const insumoId = input.dataset.insumoId;
@@ -2338,8 +2398,8 @@ let PEDIDOS_TEXTOS = {};
 async function actualizarBadgePedidos() {
   const badge = document.getElementById('badge-pedidos');
   try {
-    const filas = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo').order('insumo_id'));
-    const n = filas.filter(estaBajoMinimo).length;
+    const filas = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,pedido_en').order('insumo_id'));
+    const n = filas.filter(s => estaBajoMinimo(s) && !s.pedido_en).length;
     badge.textContent = n;
     badge.classList.toggle('oculto', n === 0);
   } catch (e) {
@@ -2365,19 +2425,82 @@ async function abrirConfigPedido(insumoId) {
     document.getElementById('sp-proveedores-lista').innerHTML = provs.map(p => `<option value="${p.nombre.replace(/"/g, '&quot;')}">`).join('');
   } catch (e) { /* la lista de proveedores es solo una ayuda */ }
 }
-document.getElementById('btn-sp-quitar').onclick = async () => {
-  const res = document.getElementById('sp-resultado');
-  const id = document.getElementById('sp-insumo-id').value;
+// ----- sacar un producto del stock (todos los roles). Si se usa en recetas, producción o ventas, hay que elegir con qué se reemplaza.
+let QUITAR_ID = null, QUITAR_REEMPLAZO = null, QUITAR_USO = null;
+const nombreStock = (s) => [s.insumos?.marca, s.insumos?.nombre].filter(Boolean).join(' ');
+async function abrirQuitarStock(id) {
   const s = STOCK_DATA.find(x => x.insumo_id === id);
-  const nombre = s ? [s.insumos?.marca, s.insumos?.nombre].filter(Boolean).join(' ') : 'este producto';
-  if (!confirm(`¿Sacar "${nombre}" del stock? Deja de aparecer en Stock y en Pedidos. El insumo sigue en Insumos y precios y en las recetas, y se puede volver a sumar desde ahí (botón ✎).`)) return;
-  const { error } = await sb.rpc('stock_baja', { p_insumo_id: id });
-  if (error) { res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(error.message)}</div>`; return; }
-  STOCK_DATA = STOCK_DATA.filter(x => x.insumo_id !== id);
+  if (!s) return;
+  QUITAR_ID = id; QUITAR_REEMPLAZO = null; QUITAR_USO = null;
   document.getElementById('stock-form-pedido').classList.add('oculto');
+  const f = document.getElementById('stock-form-quitar');
+  f.classList.remove('oculto');
+  document.getElementById('sq-titulo').textContent = 'Sacar del stock · ' + nombreStock(s);
+  document.getElementById('sq-uso').innerHTML = 'Revisando dónde se usa...';
+  document.getElementById('sq-reemplazo-bloque').classList.add('oculto');
+  document.getElementById('sq-resultado').innerHTML = '';
+  document.getElementById('sq-buscar').value = '';
+  document.getElementById('sq-sugerencias').innerHTML = '';
+  document.getElementById('sq-elegido').textContent = '';
+  document.getElementById('btn-sq-confirmar').disabled = true;
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const { data, error } = await sb.rpc('stock_uso_producto', { p_insumo_id: id });
+  if (error) { document.getElementById('sq-uso').innerHTML = `<span style="color:#b3262d">${escaparHtml(error.message)}</span>`; return; }
+  QUITAR_USO = data;
+  const lista = (t, a) => a && a.length ? `<div><b>${t}:</b> ${a.map(escaparHtml).join(', ')}</div>` : '';
+  if (data.total > 0) {
+    document.getElementById('sq-uso').innerHTML = `<b>⚠️ Este producto se usa en:</b>${lista('Recetas', data.recetas)}${lista('Ventas de Postberry', data.ventas)}${lista('Producción', data.produccion)}${lista('Receta que lo elabora', data.elaborado_por_receta)}
+      <div style="margin-top:6px">Para sacarlo tenés que elegir <b>otro producto que esté en el stock</b>: todo eso pasa a usar el producto que elijas, solo.</div>`;
+    document.getElementById('sq-reemplazo-bloque').classList.remove('oculto');
+  } else {
+    document.getElementById('sq-uso').innerHTML = 'No se usa en ninguna receta, producción ni venta. Al sacarlo deja de aparecer en Stock y en Pedidos. El producto sigue en Insumos y precios y se puede volver a sumar desde ahí.';
+    document.getElementById('btn-sq-confirmar').disabled = false;
+  }
+}
+document.getElementById('sq-buscar').addEventListener('input', (e) => {
+  const texto = normalizarTexto(e.target.value.trim());
+  const cont = document.getElementById('sq-sugerencias');
+  QUITAR_REEMPLAZO = null;
+  document.getElementById('sq-elegido').textContent = '';
+  document.getElementById('btn-sq-confirmar').disabled = true;
+  if (!texto) { cont.innerHTML = ''; return; }
+  const orig = STOCK_DATA.find(x => x.insumo_id === QUITAR_ID);
+  const sug = STOCK_DATA.filter(s => s.insumo_id !== QUITAR_ID && s.insumos && coincideInsumo(s.insumos, texto)).slice(0, 8);
+  cont.innerHTML = sug.length ? sug.map(s => `<button type="button" class="secundario sq-sug" data-id="${s.insumo_id}" style="padding:8px;font-size:13px;margin-bottom:4px">${escaparHtml(nombreStock(s))}</button>`).join('') : '<div class="sub">No hay productos en el stock con ese nombre.</div>';
+  cont.querySelectorAll('.sq-sug').forEach(b => {
+    b.onclick = () => {
+      const r = STOCK_DATA.find(x => x.insumo_id === b.dataset.id);
+      QUITAR_REEMPLAZO = b.dataset.id;
+      document.getElementById('sq-buscar').value = nombreStock(r);
+      cont.innerHTML = '';
+      const distinta = orig && orig.unidad && r.unidad && orig.unidad !== r.unidad;
+      document.getElementById('sq-elegido').innerHTML = `✓ Lo reemplaza: <b>${escaparHtml(nombreStock(r))}</b>${distinta ? `<br><span style="color:#b3262d">⚠️ Se cuentan distinto (${orig.unidad} / ${r.unidad}): después revisá las cantidades en las recetas.</span>` : ''}`;
+      document.getElementById('btn-sq-confirmar').disabled = false;
+    };
+  });
+});
+document.getElementById('btn-sq-cancelar').onclick = () => document.getElementById('stock-form-quitar').classList.add('oculto');
+document.getElementById('btn-sq-confirmar').onclick = async () => {
+  const res = document.getElementById('sq-resultado');
+  const s = STOCK_DATA.find(x => x.insumo_id === QUITAR_ID);
+  if (!s || !QUITAR_USO) return;
+  if (QUITAR_USO.total > 0 && !QUITAR_REEMPLAZO) { res.innerHTML = '<div class="estado-box estado-error">Elegí el producto que lo reemplaza.</div>'; return; }
+  const r = QUITAR_REEMPLAZO ? STOCK_DATA.find(x => x.insumo_id === QUITAR_REEMPLAZO) : null;
+  const msg = r
+    ? `¿Sacar "${nombreStock(s)}" del stock y reemplazarlo por "${nombreStock(r)}" en todas las recetas, producción y ventas? Lo que quedaba en stock (${fmtCant(s.cantidad_actual)} ${unidadTxtStock(s)}) no se pasa al otro producto.`
+    : `¿Sacar "${nombreStock(s)}" del stock? Deja de aparecer en Stock y en Pedidos.`;
+  if (!confirm(msg)) return;
+  const btn = document.getElementById('btn-sq-confirmar');
+  btn.disabled = true;
+  const { error } = await sb.rpc('stock_quitar_producto', { p_insumo_id: QUITAR_ID, p_reemplazo: QUITAR_REEMPLAZO });
+  if (error) { btn.disabled = false; res.innerHTML = `<div class="estado-box estado-error">⚠️ ${escaparHtml(error.message)}</div>`; return; }
+  STOCK_DATA = STOCK_DATA.filter(x => x.insumo_id !== QUITAR_ID);
+  document.getElementById('stock-form-quitar').classList.add('oculto');
   renderStockLista(document.getElementById('stock-buscador').value);
   actualizarBadgePedidos();
+  if (r) alert(`Listo. "${nombreStock(s)}" salió del stock y ahora se usa "${nombreStock(r)}" en las recetas.`);
 };
+document.getElementById('btn-sp-quitar').onclick = () => abrirQuitarStock(document.getElementById('sp-insumo-id').value);
 document.getElementById('btn-sp-cancelar').onclick = () => document.getElementById('stock-form-pedido').classList.add('oculto');
 document.getElementById('btn-sp-guardar').onclick = async () => {
   const res = document.getElementById('sp-resultado');
@@ -2709,13 +2832,20 @@ document.getElementById('btn-prod-guardar-lote').onclick = async () => {
     itemId = nuevo.id;
   }
   btn.disabled = true;
-  const { error } = PROD_EDIT_ID
+  const { data: resLote, error } = PROD_EDIT_ID
     ? await sb.rpc('produccion_editar_lote', { p_id: PROD_EDIT_ID, p_elaborado: fecha, p_vida_util: vida, p_cantidad: cant, p_producido_por: quien, p_merma: merma, p_motivo: motivo, p_obs: obs, p_unidad: document.getElementById('prod-lote-unidad-sel').value })
     : await sb.rpc('produccion_crear_lote', { p_item_id: itemId, p_elaborado: fecha, p_vida_util: vida, p_cantidad: cant, p_producido_por: quien, p_merma: merma, p_motivo: motivo, p_obs: obs, p_unidad: document.getElementById('prod-lote-unidad-sel').value });
   btn.disabled = false;
   if (error) { err.textContent = error.message; return; }
   document.getElementById('prod-form-lote').classList.add('oculto');
   await cargarProduccion();
+  // si el producto tiene receta, avisar qué se movió en el stock
+  const movs = (resLote && Array.isArray(resLote.movimientos)) ? resLote.movimientos : [];
+  if (movs.length) {
+    const fmt = n => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 3 });
+    const linea = m => `${m.cantidad > 0 ? '+' : '−'}${fmt(Math.abs(m.cantidad))} ${m.unidad} · ${m.producto}${m.tipo === 'merma' ? ' (merma)' : ''}`;
+    alert('Se actualizó el stock:\n\n' + movs.slice(0, 25).map(linea).join('\n') + (movs.length > 25 ? `\n... y ${movs.length - 25} más` : ''));
+  }
 };
 
 // ----- terminar lote (se usó todo o se tiró lo que quedaba)
@@ -3607,7 +3737,7 @@ async function cargarPedidos() {
   const cont = document.getElementById('pedidos-lista');
   cont.innerHTML = 'Cargando...';
   try {
-    const filas = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,unidad,dias_pedido,proveedor_pedido,cantidad_pedido,insumos(nombre,marca,subcategoria)').order('insumo_id'));
+    const filas = await traerTodo(() => sb.from('stock').select('insumo_id,cantidad_actual,stock_minimo,unidad,dias_pedido,proveedor_pedido,cantidad_pedido,pedido_en,insumos(nombre,marca,subcategoria)').order('insumo_id'));
     const porCategoria = {};
     filas.forEach(s => { const c = s.insumos?.subcategoria || 'otros'; (porCategoria[c] = porCategoria[c] || []).push(s); });
     const categorias = ORDEN_SUBCATEGORIAS.filter(c => porCategoria[c]).concat(Object.keys(porCategoria).filter(c => !ORDEN_SUBCATEGORIAS.includes(c)));
@@ -3616,8 +3746,8 @@ async function cargarPedidos() {
     let totalPedir = 0;
     const html = categorias.map(cat => {
       const todos = porCategoria[cat];
-      const bajos = todos.filter(estaBajoMinimo);
-      const conMinimo = todos.filter(s => Number(s.stock_minimo) > 0 && !estaBajoMinimo(s));
+      const bajos = todos.filter(s => estaBajoMinimo(s) && !s.pedido_en);
+      const conMinimo = todos.filter(s => Number(s.stock_minimo) > 0 && !estaBajoMinimo(s) && !s.pedido_en);
       const sinMinimo = todos.filter(s => !(Number(s.stock_minimo) > 0));
       totalPedir += bajos.length;
       const titulo = ETIQUETA_SUBCATEGORIA[cat] || cat;
@@ -3633,11 +3763,13 @@ async function cargarPedidos() {
         const filasHtml = items.map(s => `<div class="lista-item">
           <div><div class="nombre">${s.insumos?.nombre || ''}</div>
             <div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}Hay ${fmtCant(s.cantidad_actual)} ${unidadTxtStock(s)} · mínimo ${fmtCant(s.stock_minimo)} ${unidadTxtStock(s)}</div></div>
-          <div style="text-align:right;flex:none"><div class="nombre">${s.cantidad_pedido ? s.cantidad_pedido : '—'}</div><div class="sub">a pedir</div></div>
+          <div style="text-align:right;flex:none"><div class="nombre">${s.cantidad_pedido ? s.cantidad_pedido : '—'}</div><div class="sub">a pedir</div>
+            <button type="button" class="secundario btn-ya-pedi" data-ids="${s.insumo_id}" style="width:auto;padding:4px 8px;margin:4px 0 0;font-size:12px">✓ Ya lo pedí</button></div>
         </div>`).join('');
         return `<div style="margin-bottom:10px"><div class="nombre" style="margin:4px 0">${p}${dias ? ` <span class="grupo-cant">· ${dias}</span>` : ''}</div>${filasHtml}
           <button type="button" class="secundario btn-copiar-pedido" data-g="${key}">Copiar pedido a ${p.startsWith('Sin ') ? 'este grupo' : p}</button>
-          <button type="button" class="secundario btn-wsp-pedido" data-g="${key}">Mandar por WhatsApp</button></div>`;
+          <button type="button" class="secundario btn-wsp-pedido" data-g="${key}">Mandar por WhatsApp</button>
+          <button type="button" class="secundario btn-ya-pedi" data-ids="${items.map(s => s.insumo_id).join(',')}">✓ Ya pedí todo esto</button></div>`;
       }).join('');
       const okHtml = conMinimo.length ? `<details style="margin-top:6px"><summary style="padding:8px 4px;font-weight:600;font-size:13px">Con mínimo cargado y sin necesidad de pedir (${conMinimo.length})</summary>` +
         conMinimo.sort((a, b) => (a.insumos?.nombre || '').localeCompare(b.insumos?.nombre || '')).map(s => `<div class="lista-item"><div><div class="nombre">${s.insumos?.nombre || ''}</div><div class="sub">${s.insumos?.marca ? s.insumos.marca + ' · ' : ''}${s.proveedor_pedido || 'sin proveedor'}</div></div><div style="text-align:right;flex:none" class="sub">Hay ${fmtCant(s.cantidad_actual)} ${unidadTxtStock(s)}<br>mínimo ${fmtCant(s.stock_minimo)} ${unidadTxtStock(s)}</div></div>`).join('') + '</details>' : '';
@@ -3648,7 +3780,26 @@ async function cargarPedidos() {
         <div class="grupo-stock-body">${cuerpo}</div>
       </details>`;
     }).join('');
-    cont.innerHTML = (totalPedir ? `<div class="aviso"><b>${totalPedir}</b> insumos para pedir.</div>` : '<div class="aviso">No hay nada para pedir. 👍</div>') + html;
+    // productos que ya se pidieron y están esperando que lleguen (salen solos cuando entran por factura o remito)
+    const enEspera = filas.filter(s => s.pedido_en).sort((a, b) => String(b.pedido_en).localeCompare(String(a.pedido_en)));
+    const esperaHtml = enEspera.length ? `<details class="grupo-stock" open>
+      <summary><span>⏳ Pedidos en espera <span class="grupo-cant">(${enEspera.length}) · salen solos cuando entran por factura o remito</span></span></summary>
+      <div class="grupo-stock-body">${enEspera.map(s => {
+        const cuando = new Date(s.pedido_en).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' });
+        return `<div class="lista-item"><div><div class="nombre">${escaparHtml(s.insumos?.nombre || '')}</div>
+          <div class="sub">${s.insumos?.marca ? escaparHtml(s.insumos.marca) + ' · ' : ''}${escaparHtml(s.proveedor_pedido || 'sin proveedor')} · pedido el ${cuando}${s.cantidad_pedido ? ' · ' + escaparHtml(s.cantidad_pedido) : ''}</div></div>
+          <button type="button" class="secundario btn-no-pedi" data-ids="${s.insumo_id}" style="width:auto;padding:6px 10px;margin:0;flex:none">Volver a pendientes</button></div>`;
+      }).join('')}</div></details>` : '';
+    cont.innerHTML = (totalPedir ? `<div class="aviso"><b>${totalPedir}</b> insumos para pedir.</div>` : '<div class="aviso">No hay nada para pedir. 👍</div>') + esperaHtml + html;
+    const marcarPedido = async (b, pedido) => {
+      b.disabled = true;
+      const { error } = await sb.rpc('pedido_marcar', { p_insumo_ids: b.dataset.ids.split(','), p_pedido: pedido });
+      if (error) { b.disabled = false; alert('No se pudo guardar: ' + error.message); return; }
+      await cargarPedidos();
+      actualizarBadgePedidos();
+    };
+    cont.querySelectorAll('.btn-ya-pedi').forEach(b => { b.onclick = () => marcarPedido(b, true); });
+    cont.querySelectorAll('.btn-no-pedi').forEach(b => { b.onclick = () => marcarPedido(b, false); });
     cont.querySelectorAll('.btn-copiar-pedido').forEach(b => {
       b.onclick = async () => {
         const original = b.textContent;
