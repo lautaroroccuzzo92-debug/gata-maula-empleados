@@ -8,6 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin, requireUsuario } from './_auth.js';
 import { GUIA } from './_guia.js';
+import { esErrorSinCredito, avisarSinCredito, avisoSinCreditoResuelto, MSG_SIN_CREDITO_USUARIO } from './_ia.js';
 
 export const config = { maxDuration: 60 };
 
@@ -482,6 +483,7 @@ async function llamarClaude(system, messages, tools) {
   if (!resp.ok) {
     const err = new Error(data?.error?.message || 'Error al consultar a la IA.');
     err.status = 502;
+    err.sinCredito = esErrorSinCredito(data?.error?.message);
     throw err;
   }
   return data;
@@ -524,6 +526,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ respuesta: 'Tardé demasiado en juntar los datos. Probá de nuevo con una pregunta más corta o más puntual.' });
       }
       const r = await llamarClaude(system, mensajes, tools);
+      if (vuelta === 0) await avisoSinCreditoResuelto(admin); // si la IA anda, se cierra solo el aviso de "sin crédito"
       if (r.stop_reason !== 'tool_use') {
         const texto = (r.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
         return res.status(200).json({ respuesta: texto || 'No pude armar una respuesta, probá de nuevo.' });
@@ -544,6 +547,10 @@ export default async function handler(req, res) {
     }
     return res.status(200).json({ respuesta: 'La consulta era muy grande. Probá con una pregunta más concreta (por ejemplo, un período más corto).' });
   } catch (err) {
+    if (err.sinCredito) {
+      try { await avisarSinCredito(supabaseAdmin(), 'gatito'); } catch (e) { /* nada */ }
+      return res.status(503).json({ error: MSG_SIN_CREDITO_USUARIO });
+    }
     return res.status(err.status || 500).json({ error: err.message || 'Error interno.' });
   }
 }

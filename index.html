@@ -258,6 +258,7 @@
       </svg>
     </div>
     <div class="saludo" id="saludo-texto"></div>
+    <div id="avisos-sistema"></div>
 
     <div class="card" id="nav-otras-pantallas">
       <h2 class="section-title" style="margin-top:0">Otras pantallas</h2>
@@ -1438,6 +1439,32 @@ function aplicarGatingPorRol() {
   document.getElementById('btn-nav-sueldos').classList.toggle('oculto', rol !== 'admin');
 }
 
+// Avisos del sistema para el administrador (ej. la IA se quedó sin crédito): cuadro rojo arriba del inicio
+async function actualizarAvisosSistema() {
+  const cont = document.getElementById('avisos-sistema');
+  cont.innerHTML = '';
+  if (!USUARIO_ACTUAL || USUARIO_ACTUAL.rol !== 'admin') return;
+  try {
+    const { data, error } = await sb.from('avisos_sistema').select('id,mensaje,origen,veces,ultimo_en').eq('resuelto', false).order('ultimo_en', { ascending: false });
+    if (error || !data || !data.length) return;
+    cont.innerHTML = data.map(a => {
+      const cuando = new Date(a.ultimo_en).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }).replace(',', '');
+      return `<div class="estado-box estado-error" style="margin:10px 0">
+        <b>⚠️ ${escaparHtml(a.mensaje)}</b>
+        <div class="sub" style="margin-top:4px">Último intento fallido: ${cuando}${a.origen ? ' (' + escaparHtml(a.origen) + ')' : ''} · ${a.veces} ${a.veces === 1 ? 'vez' : 'veces'}. Se borra solo cuando la IA vuelve a funcionar.</div>
+        <button type="button" class="secundario btn-aviso-resuelto" data-id="${a.id}" style="margin-top:8px">Ya lo resolví</button></div>`;
+    }).join('');
+    cont.querySelectorAll('.btn-aviso-resuelto').forEach(b => {
+      b.onclick = async () => {
+        b.disabled = true;
+        const { error: e } = await sb.rpc('aviso_resolver', { p_id: b.dataset.id });
+        if (e) { b.disabled = false; alert(e.message); return; }
+        actualizarAvisosSistema();
+      };
+    });
+  } catch (e) { /* si todavía no está la tabla, no se muestra nada */ }
+}
+
 function irAHome() {
   const nombre = USUARIO_ACTUAL ? USUARIO_ACTUAL.nombre : '';
   const h = new Date().getHours();
@@ -1451,6 +1478,7 @@ function irAHome() {
   actualizarBadgeProduccion();
   actualizarHorasHome();
   actualizarVacaciones();
+  actualizarAvisosSistema();
 }
 
 // ---------- Config ----------
@@ -1703,7 +1731,7 @@ document.getElementById('btn-analizar').onclick = async () => {
     });
     const data = await resp.json();
     if (!resp.ok || !data.success) {
-      alert('Error al analizar: ' + (data.error || 'desconocido'));
+      alert((resp.status === 503 ? '' : 'Error al analizar: ') + (data.error || 'desconocido'));
       mostrarPantalla('home');
       return;
     }

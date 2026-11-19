@@ -4,6 +4,7 @@
 // admin y encargado con sesión iniciada (se verifica el token de Supabase).
 
 import { supabaseAdmin, requireUsuario } from './_auth.js';
+import { esErrorSinCredito, avisarSinCredito, avisoSinCreditoResuelto, MSG_SIN_CREDITO_USUARIO } from './_ia.js';
 
 export const config = {
   api: {
@@ -116,10 +117,15 @@ export default async function handler(req, res) {
     const data = await anthropicResp.json();
 
     if (!anthropicResp.ok) {
+      if (esErrorSinCredito(data.error?.message)) {
+        await avisarSinCredito(admin, 'lectura de facturas');
+        return res.status(503).json({ error: MSG_SIN_CREDITO_USUARIO });
+      }
       return res.status(anthropicResp.status).json({
         error: data.error?.message || 'Error llamando a la API de Anthropic'
       });
     }
+    await avisoSinCreditoResuelto(admin);
 
     const textBlock = (data.content || []).find((b) => b.type === 'text');
     if (!textBlock) {

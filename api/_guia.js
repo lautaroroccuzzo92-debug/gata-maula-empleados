@@ -100,6 +100,7 @@ Es este chat: responde dudas de cómo usar la app y, para admin y encargado, tam
 DUDAS FRECUENTES
 - "Se me cargó mal una cantidad de stock": corregir el número en Stock.
 - "No me aparece un producto en Pedidos": tiene que tener un stock mínimo mayor a 0 y estar en ese mínimo o por debajo. Admin y encargado lo configuran con el ⚙ en Stock.
+- "La lectura de la factura o el gatito dicen que la inteligencia artificial está sin crédito": se acabó el crédito de la cuenta de la IA. Hay que avisar a Lautaro (administrador): él ve un cuadro rojo arriba del inicio y carga crédito en console.anthropic.com. Mientras tanto la app sigue funcionando normal, salvo la lectura de facturas con foto y el gatito. Vuelve a andar apenas se carga crédito.
 - "No encuentro un insumo": usar el buscador; si no existe, el admin o encargado puede crearlo en Insumos y precios con "+ Nuevo insumo".
 - "Me equivoqué en una factura ya confirmada" o cualquier cosa que no se pueda deshacer desde una pantalla: avisarle al administrador (Lautaro).
 `;
